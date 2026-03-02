@@ -6,3 +6,9 @@ src/rust/target
 CLAUDE.md
 ..Rcheck/
 inst/extdata/random_table_40mb.xlsb
+
+# Compiled files
+src/*.so
+src/*.o
+src/rust/.cargo/.package-cache
+src/rust/.cargo/.package-cache-mutate
