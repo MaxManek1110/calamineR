@@ -10,3 +10,5 @@
 ^src/rust/\.cargo/\.package-cache$
 ^src/rust/\.cargo/\.package-cache-mutate$
 ^\.\.Rcheck$
+^benchmark\.R$
+^inst/extdata/random_table_40mb\.xlsb$

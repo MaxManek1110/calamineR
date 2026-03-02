@@ -3,11 +3,6 @@
 
 # calaminer
 
-<!-- badges: start -->
-[![R-CMD-check](https://github.com/mmanek/calaminer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mmanek/calaminer/actions/workflows/R-CMD-check.yaml)
-[![CRAN status](https://www.r-pkg.org/badges/version/calaminer)](https://CRAN.R-project.org/package=calaminer)
-<!-- badges: end -->
-
 Fast Excel file reader for R, powered by the Rust [calamine](https://github.com/tafia/calamine) library.
 
 ## Supported Formats
@@ -28,8 +23,8 @@ Fast Excel file reader for R, powered by the Rust [calamine](https://github.com/
 You can install the development version of calaminer from [GitHub](https://github.com/) with:
 
 ``` r
-# install.packages("pak")
-pak::pak("mmanek/calaminer")
+# install.packages("remotes")
+remotes::install_github("mmanek/calaminer")
 ```
 
 ## Usage
@@ -38,16 +33,16 @@ pak::pak("mmanek/calaminer")
 library(calaminer)
 
 # Read a sheet as data.frame
-df <- read_excel_calamine("data.xlsx")
-df <- read_excel_calamine("data.xlsb", sheet = "Sheet2")
-df <- read_excel_calamine("data.xlsx", sheet = 2, col_names = FALSE)
-df <- read_excel_calamine("data.xlsx", skip = 5)  # Skip first 5 rows
+df <- read_excel("data.xlsx")
+df <- read_excel("data.xlsb", sheet = "Sheet2")
+df <- read_excel("data.xlsx", sheet = 2, col_names = FALSE)
+df <- read_excel("data.xlsx", skip = 5)  # Skip first 5 rows
 
 # Get sheet names
-sheets <- excel_sheets_calamine("data.xlsx")
+sheets <- excel_sheets("data.xlsx")
 
 # Get sheet dimensions
-dims <- sheet_dims_calamine("data.xlsx", 1)
+dims <- sheet_dims("data.xlsx", 1)
 # dims["rows"], dims["cols"]
 
 # Read as raw list of rows (for complex layouts)
@@ -58,9 +53,9 @@ rows <- read_sheet_raw("data.xlsx", "Sheet1")
 
 | Function | Description |
 |----------|-------------|
-| `read_excel_calamine()` | Read sheet as data.frame |
-| `excel_sheets_calamine()` | Get sheet names |
-| `sheet_dims_calamine()` | Get sheet dimensions (rows, cols) |
+| `read_excel()` | Read sheet as data.frame |
+| `excel_sheets()` | Get sheet names |
+| `sheet_dims()` | Get sheet dimensions (rows, cols) |
 | `read_sheet_raw()` | Read as list of character vectors |
 
 ## Performance

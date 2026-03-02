@@ -8,12 +8,12 @@ file_path <- "inst/extdata/random_table_40mb.xlsb"
 cat("Benchmarking:", file_path, "\n\n")
 
 # Benchmark calaminer
-cat("calaminer::read_excel_calamine()\n")
+cat("calaminer::read_excel()\n")
 time_calaminer <- system.time({
-  df_calaminer <- calaminer::read_excel_calamine(file_path)
+  df_calaminer <- calaminer::read_excel(file_path)
 })
-sheets <- calaminer::excel_sheets_calamine(file_path)
-dims <- calaminer::sheet_dims_calamine(file_path, sheet = 1)
+sheets <- calaminer::excel_sheets(file_path)
+dims <- calaminer::sheet_dims(file_path, sheet = 1)
 range <- paste0("A1:", LETTERS[dims[2][[1]]], dims[1][[1]])
 cat("  Time:", time_calaminer["elapsed"], "seconds\n")
 cat("  Rows:", nrow(df_calaminer), " Cols:", ncol(df_calaminer), "\n\n")

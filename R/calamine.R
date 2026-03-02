@@ -15,16 +15,16 @@
 #' # Using package test file
 #' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
 #' if (nzchar(test_file)) {
-#'   df <- read_excel_calamine(test_file)
+#'   df <- read_excel(test_file)
 #'   head(df)
 #'
 #'   # Read specific sheet by index
-#'   df <- read_excel_calamine(test_file, sheet = 1)
+#'   df <- read_excel(test_file, sheet = 1)
 #'
 #'   # Skip header row
-#'   df_no_header <- read_excel_calamine(test_file, col_names = FALSE)
+#'   df_no_header <- read_excel(test_file, col_names = FALSE)
 #' }
-read_excel_calamine <- function(path, sheet = 1L, col_names = TRUE, skip = 0L) {
+read_excel <- function(path, sheet = 1L, col_names = TRUE, skip = 0L) {
   path <- normalizePath(path, mustWork = TRUE)
   cal_read_sheet_df(path, sheet, col_names, as.integer(skip))
 }
@@ -38,10 +38,10 @@ read_excel_calamine <- function(path, sheet = 1L, col_names = TRUE, skip = 0L) {
 #' @examples
 #' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
 #' if (nzchar(test_file)) {
-#'   sheets <- excel_sheets_calamine(test_file)
+#'   sheets <- excel_sheets(test_file)
 #'   print(sheets)
 #' }
-excel_sheets_calamine <- function(path) {
+excel_sheets <- function(path) {
   path <- normalizePath(path, mustWork = TRUE)
   cal_sheet_names(path)
 }
@@ -56,10 +56,10 @@ excel_sheets_calamine <- function(path) {
 #' @examples
 #' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
 #' if (nzchar(test_file)) {
-#'   dims <- sheet_dims_calamine(test_file, 1)
+#'   dims <- sheet_dims(test_file, 1)
 #'   print(dims)  # Named vector: rows, cols
 #' }
-sheet_dims_calamine <- function(path, sheet = 1L) {
+sheet_dims <- function(path, sheet = 1L) {
   path <- normalizePath(path, mustWork = TRUE)
   dims <- cal_sheet_dims(path, sheet)
   names(dims) <- c("rows", "cols")

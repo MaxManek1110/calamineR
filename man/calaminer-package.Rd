@@ -11,13 +11,19 @@ High-performance Excel file reader supporting xlsx, xlsm, xlsb, xls, and ods for
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/mmanek/calaminer}
-  \item Report bugs at \url{https://github.com/mmanek/calaminer/issues}
+  \item \url{https://github.com/MaxManek1110/calamine_r}
+  \item Report bugs at \url{https://github.com/MaxManek1110/calamine_r/issues}
 }
 
 }
 \author{
 \strong{Maintainer}: Maximilian Manek \email{maximilian.manek@hotmail.de}
+
+Authors:
+\itemize{
+  \item Johann Tuffe (calamine Rust library)
+  \item Authors of the dependent Rust crates (see AUTHORS file)
+}
 
 }
 \keyword{internal}

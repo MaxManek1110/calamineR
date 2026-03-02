@@ -12,16 +12,16 @@
 
 ### Notes explanation:
 
-1. **Hidden files and directories**: The `src/rust/vendor/` directory contains
+1. **New submission**: This is a new package.
+
+2. **Hidden files and directories**: The `src/rust/vendor/` directory contains
    vendored Rust dependencies with `.cargo-checksum.json` files. These are
    required for offline builds as mandated by CRAN policy for packages with
    Rust compiled code. See [Using Rust in CRAN Packages](https://cran.r-project.org/web/packages/using_rust.html).
 
-2. **Installed package size (~7Mb)**: This is typical for packages with Rust
+3. **Installed package size (~7Mb)**: This is typical for packages with Rust
    compiled code. The static library contains optimized, LTO-compiled Rust code.
    This is unavoidable for packages using Rust.
-
-3. **Future file timestamps**: This is a transient check environment issue
 
 ## Downstream dependencies
 
