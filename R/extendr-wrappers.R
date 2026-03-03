@@ -43,4 +43,13 @@ cal_sheet_dims <- function(path, sheet) {
   .Call(wrap__cal_sheet_dims, path, sheet)
 }
 
+#' Get merged cell regions from an Excel file
+#' @param path Path to the Excel file
+#' @param sheet Sheet name or index (1-based)
+#' @return A data.frame with columns: start_row, start_col, end_row, end_col (1-based)
+#' @export
+cal_merge_regions <- function(path, sheet) {
+  .Call(wrap__cal_merge_regions, path, sheet)
+}
+
 # nolint end

@@ -1107,6 +1107,45 @@ fn cell_to_rstr(cell: &Data) -> Rstr {
     }
 }
 
+/// Get merged cell regions from an Excel file
+/// @param path Path to the Excel file
+/// @param sheet Sheet name or index (1-based)
+/// @return A data.frame with columns: start_row, start_col, end_row, end_col (1-based)
+/// @export
+#[extendr]
+fn cal_merge_regions(path: &str, sheet: Robj) -> Result<List> {
+    let mut workbook = open_workbook_auto(path)
+        .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
+
+    let sheet_names = workbook.sheet_names().to_vec();
+    let sheet_name = get_sheet_name(&sheet, &sheet_names)
+        .map_err(|e| Error::Other(e))?;
+
+    let sheet_idx = sheet_names.iter().position(|n| n == &sheet_name).unwrap_or(0);
+
+    let regions = get_merge_regions(path, &sheet_name, sheet_idx);
+
+    let nrows = regions.len();
+
+    // Build data.frame with 1-based indices for R
+    let start_rows: Vec<i32> = regions.iter().map(|r| (r.start_row + 1) as i32).collect();
+    let start_cols: Vec<i32> = regions.iter().map(|r| (r.start_col + 1) as i32).collect();
+    let end_rows: Vec<i32> = regions.iter().map(|r| (r.end_row + 1) as i32).collect();
+    let end_cols: Vec<i32> = regions.iter().map(|r| (r.end_col + 1) as i32).collect();
+
+    let mut df = List::new(4);
+    df.set_elt(0, start_rows.into_robj())?;
+    df.set_elt(1, start_cols.into_robj())?;
+    df.set_elt(2, end_rows.into_robj())?;
+    df.set_elt(3, end_cols.into_robj())?;
+
+    df.set_names(["start_row", "start_col", "end_row", "end_col"])?;
+    df.set_class(&["data.frame"])?;
+    df.set_attrib("row.names", (1..=nrows as i32).collect::<Vec<i32>>())?;
+
+    Ok(df)
+}
+
 // Macro to generate R exports
 extendr_module! {
     mod calamine_r;
@@ -1114,4 +1153,5 @@ extendr_module! {
     fn cal_read_sheet;
     fn cal_read_sheet_df;
     fn cal_sheet_dims;
+    fn cal_merge_regions;
 }

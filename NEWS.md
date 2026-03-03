@@ -1,6 +1,7 @@
 # calamineR 0.1.1
 
 * Added `fill_merged_cells` parameter to `read_excel()` - when TRUE, fills merged cells with the value from the top-left cell of the merged region
+* Added `merge_regions()` function to retrieve merged cell regions as a data.frame
 * Merged cell support for xlsx, xlsm, xlsb, and xls formats
 * Package renamed from calaminer to calamineR
 

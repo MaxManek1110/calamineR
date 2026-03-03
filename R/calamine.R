@@ -93,3 +93,28 @@ read_sheet_raw <- function(path, sheet = 1L) {
   path <- normalizePath(path, mustWork = TRUE)
   cal_read_sheet(path, sheet)
 }
+
+#' Get Merged Cell Regions
+#'
+#' Returns information about merged cell regions in a sheet.
+#' Supported formats: xlsx, xlsm, xlsb, xls (not ods).
+#'
+#' @param path Path to the Excel file
+#' @param sheet Sheet name or index (1-based). Default: 1
+#' @return A data.frame with columns:
+#'   \item{start_row}{First row of merged region (1-based)}
+#'   \item{start_col}{First column of merged region (1-based)}
+#'   \item{end_row}{Last row of merged region (1-based)}
+#'   \item{end_col}{Last column of merged region (1-based)}
+#' @export
+#'
+#' @examples
+#' test_file <- system.file("extdata", "test_merged.xlsx", package = "calamineR")
+#' if (nzchar(test_file)) {
+#'   regions <- merge_regions(test_file, 1)
+#'   print(regions)
+#' }
+merge_regions <- function(path, sheet = 1L) {
+  path <- normalizePath(path, mustWork = TRUE)
+  cal_merge_regions(path, sheet)
+}

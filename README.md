@@ -62,6 +62,7 @@ rows <- read_sheet_raw("data.xlsx", "Sheet1")
 | `excel_sheets()`   | Get sheet names                   |
 | `sheet_dims()`     | Get sheet dimensions (rows, cols) |
 | `read_sheet_raw()` | Read as list of character vectors |
+| `merge_regions()`  | Get merged cell regions           |
 
 ## Parameters for `read_excel()`
 
