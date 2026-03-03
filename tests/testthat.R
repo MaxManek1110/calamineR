@@ -1,4 +1,4 @@
 library(testthat)
-library(calaminer)
+library(calamineR)
 
-test_check("calaminer")
+test_check("calamineR")

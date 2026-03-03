@@ -16,7 +16,7 @@ Character vector of sheet names
 Get Sheet Names from Excel File
 }
 \examples{
-test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 if (nzchar(test_file)) {
   sheets <- excel_sheets(test_file)
   print(sheets)

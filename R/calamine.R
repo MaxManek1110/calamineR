@@ -7,13 +7,15 @@
 #' @param sheet Sheet name (character) or index (integer, 1-based). Default: 1
 #' @param col_names Use first row as column names. Default: TRUE
 #' @param skip Number of rows to skip before reading. Default: 0
+#' @param fill_merged_cells If TRUE, fill merged cells with the value from the
+#'   top-left cell of the merged region. Default: FALSE
 #'
 #' @return A data.frame
 #' @export
 #'
 #' @examples
 #' # Using package test file
-#' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+#' test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 #' if (nzchar(test_file)) {
 #'   df <- read_excel(test_file)
 #'   head(df)
@@ -23,10 +25,14 @@
 #'
 #'   # Skip header row
 #'   df_no_header <- read_excel(test_file, col_names = FALSE)
+#'
+#'   # Fill merged cells with their value
+#'   df_filled <- read_excel(test_file, fill_merged_cells = TRUE)
 #' }
-read_excel <- function(path, sheet = 1L, col_names = TRUE, skip = 0L) {
+read_excel <- function(path, sheet = 1L, col_names = TRUE, skip = 0L,
+                       fill_merged_cells = FALSE) {
   path <- normalizePath(path, mustWork = TRUE)
-  cal_read_sheet_df(path, sheet, col_names, as.integer(skip))
+  cal_read_sheet_df(path, sheet, col_names, as.integer(skip), fill_merged_cells)
 }
 
 #' Get Sheet Names from Excel File
@@ -36,7 +42,7 @@ read_excel <- function(path, sheet = 1L, col_names = TRUE, skip = 0L) {
 #' @export
 #'
 #' @examples
-#' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+#' test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 #' if (nzchar(test_file)) {
 #'   sheets <- excel_sheets(test_file)
 #'   print(sheets)
@@ -54,7 +60,7 @@ excel_sheets <- function(path) {
 #' @export
 #'
 #' @examples
-#' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+#' test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 #' if (nzchar(test_file)) {
 #'   dims <- sheet_dims(test_file, 1)
 #'   print(dims)  # Named vector: rows, cols
@@ -77,7 +83,7 @@ sheet_dims <- function(path, sheet = 1L) {
 #' @export
 #'
 #' @examples
-#' test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+#' test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 #' if (nzchar(test_file)) {
 #'   rows <- read_sheet_raw(test_file, 1)
 #'   # Returns list of character vectors (one per row)

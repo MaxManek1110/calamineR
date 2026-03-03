@@ -4,7 +4,7 @@
 \alias{cal_read_sheet_df}
 \title{Read a sheet as a data.frame}
 \usage{
-cal_read_sheet_df(path, sheet, col_names, skip)
+cal_read_sheet_df(path, sheet, col_names, skip, fill_merged)
 }
 \arguments{
 \item{path}{Path to the Excel file}
@@ -14,6 +14,8 @@ cal_read_sheet_df(path, sheet, col_names, skip)
 \item{col_names}{Use first row as column names}
 
 \item{skip}{Number of rows to skip before reading}
+
+\item{fill_merged}{Fill merged cells with the top-left value}
 }
 \value{
 A data.frame

@@ -2,7 +2,7 @@
 # nolint start
 
 #' @keywords internal
-#' @useDynLib calaminer, .registration = TRUE
+#' @useDynLib calamineR, .registration = TRUE
 "_PACKAGE"
 
 #' Get sheet names from an Excel file
@@ -27,10 +27,11 @@ cal_read_sheet <- function(path, sheet) {
 #' @param sheet Sheet name or index (1-based)
 #' @param col_names Use first row as column names
 #' @param skip Number of rows to skip before reading
+#' @param fill_merged Fill merged cells with the top-left value
 #' @return A data.frame
 #' @export
-cal_read_sheet_df <- function(path, sheet, col_names, skip) {
-  .Call(wrap__cal_read_sheet_df, path, sheet, col_names, skip)
+cal_read_sheet_df <- function(path, sheet, col_names, skip, fill_merged) {
+  .Call(wrap__cal_read_sheet_df, path, sheet, col_names, skip, fill_merged)
 }
 
 #' Read sheet dimensions (rows, cols)

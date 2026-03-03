@@ -4,7 +4,13 @@
 \alias{read_excel}
 \title{Read Excel File Using Calamine}
 \usage{
-read_excel(path, sheet = 1L, col_names = TRUE, skip = 0L)
+read_excel(
+  path,
+  sheet = 1L,
+  col_names = TRUE,
+  skip = 0L,
+  fill_merged_cells = FALSE
+)
 }
 \arguments{
 \item{path}{Path to the Excel file}
@@ -14,6 +20,9 @@ read_excel(path, sheet = 1L, col_names = TRUE, skip = 0L)
 \item{col_names}{Use first row as column names. Default: TRUE}
 
 \item{skip}{Number of rows to skip before reading. Default: 0}
+
+\item{fill_merged_cells}{If TRUE, fill merged cells with the value from the
+top-left cell of the merged region. Default: FALSE}
 }
 \value{
 A data.frame
@@ -24,7 +33,7 @@ Supports xlsx, xlsm, xlsb, xls, and ods formats.
 }
 \examples{
 # Using package test file
-test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 if (nzchar(test_file)) {
   df <- read_excel(test_file)
   head(df)
@@ -34,5 +43,8 @@ if (nzchar(test_file)) {
 
   # Skip header row
   df_no_header <- read_excel(test_file, col_names = FALSE)
+
+  # Fill merged cells with their value
+  df_filled <- read_excel(test_file, fill_merged_cells = TRUE)
 }
 }

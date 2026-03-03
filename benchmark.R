@@ -1,22 +1,22 @@
-# Benchmark: calaminer vs readxlsb for .xlsb files
+# Benchmark: calamineR vs readxlsb for .xlsb files
 # Install readxlsb if needed: install.packages("readxlsb")
 
-library(calaminer)
+library(calamineR)
 
 file_path <- "inst/extdata/random_table_40mb.xlsb"
 
 cat("Benchmarking:", file_path, "\n\n")
 
-# Benchmark calaminer
-cat("calaminer::read_excel()\n")
-time_calaminer <- system.time({
-  df_calaminer <- calaminer::read_excel(file_path)
+# Benchmark calamineR
+cat("calamineR::read_excel()\n")
+time_calamineR <- system.time({
+  df_calamineR <- calamineR::read_excel(file_path)
 })
-sheets <- calaminer::excel_sheets(file_path)
-dims <- calaminer::sheet_dims(file_path, sheet = 1)
+sheets <- calamineR::excel_sheets(file_path)
+dims <- calamineR::sheet_dims(file_path, sheet = 1)
 range <- paste0("A1:", LETTERS[dims[2][[1]]], dims[1][[1]])
-cat("  Time:", time_calaminer["elapsed"], "seconds\n")
-cat("  Rows:", nrow(df_calaminer), " Cols:", ncol(df_calaminer), "\n\n")
+cat("  Time:", time_calamineR["elapsed"], "seconds\n")
+cat("  Rows:", nrow(df_calamineR), " Cols:", ncol(df_calamineR), "\n\n")
 
 # Benchmark readxlsb
 if (requireNamespace("readxlsb", quietly = TRUE)) {
@@ -33,11 +33,11 @@ if (requireNamespace("readxlsb", quietly = TRUE)) {
 
   # Summary
   cat("--- Summary ---\n")
-  cat("calaminer:", round(time_calaminer["elapsed"], 3), "s\n")
+  cat("calamineR:", round(time_calamineR["elapsed"], 3), "s\n")
   cat("readxlsb: ", round(time_readxlsb["elapsed"], 3), "s\n")
   cat(
     "Speedup:  ",
-    round(time_readxlsb["elapsed"] / time_calaminer["elapsed"], 1),
+    round(time_readxlsb["elapsed"] / time_calamineR["elapsed"], 1),
     "x faster\n"
   )
 } else {
@@ -60,6 +60,6 @@ compare_dt <- function(x, y) {
   )
 }
 
-df1 <- as.data.table(df_calaminer)
+df1 <- as.data.table(df_calamineR)
 df2 <- as.data.table(df_readxlsb)
 compare_dt(df1, df2)

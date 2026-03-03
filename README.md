@@ -21,7 +21,7 @@ Fast Excel file reader for R, powered by the Rust
 
 ## Installation
 
-You can install the development version of calaminer from
+You can install the development version of calamineR from
 [GitHub](https://github.com/) with:
 
 ``` r
@@ -39,6 +39,9 @@ df <- read_excel("data.xlsx")
 df <- read_excel("data.xlsb", sheet = "Sheet2")
 df <- read_excel("data.xlsx", sheet = 2, col_names = FALSE)
 df <- read_excel("data.xlsx", skip = 5)  # Skip first 5 rows
+
+# Fill merged cells with the top-left cell value
+df <- read_excel("data.xlsx", fill_merged_cells = TRUE)
 
 # Get sheet names
 sheets <- excel_sheets("data.xlsx")
@@ -59,6 +62,22 @@ rows <- read_sheet_raw("data.xlsx", "Sheet1")
 | `excel_sheets()`   | Get sheet names                   |
 | `sheet_dims()`     | Get sheet dimensions (rows, cols) |
 | `read_sheet_raw()` | Read as list of character vectors |
+
+## Parameters for `read_excel()`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | character | (required) | Path to the Excel file |
+| `sheet` | character/integer | `1L` | Sheet name or 1-based index |
+| `col_names` | logical | `TRUE` | Use first row as column names |
+| `skip` | integer | `0L` | Number of rows to skip |
+| `fill_merged_cells` | logical | `FALSE` | Fill merged cells with top-left value |
+
+## Merged Cells Support
+
+When `fill_merged_cells = TRUE`, cells that are part of a merged region are filled with the value from the top-left cell of that region. This is useful when reading spreadsheets where headers or data span multiple cells.
+
+Supported formats: xlsx, xlsm, xlsb, xls (ods not yet supported for merged cells).
 
 ## Performance
 

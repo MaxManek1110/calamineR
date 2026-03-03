@@ -4,7 +4,7 @@
 MSRV="1.75.0"
 
 echo "-------------------------------------------"
-echo "Configuring calaminer package"
+echo "Configuring calamineR package"
 echo "-------------------------------------------"
 
 # Check for Cargo

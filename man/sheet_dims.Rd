@@ -18,7 +18,7 @@ Named integer vector with "rows" and "cols"
 Get Sheet Dimensions
 }
 \examples{
-test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 if (nzchar(test_file)) {
   dims <- sheet_dims(test_file, 1)
   print(dims)  # Named vector: rows, cols

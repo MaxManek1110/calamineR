@@ -19,7 +19,7 @@ Returns sheet data as a list of character vectors (one per row).
 Useful for complex layouts where data.frame structure doesn't fit.
 }
 \examples{
-test_file <- system.file("extdata", "test.xlsx", package = "calaminer")
+test_file <- system.file("extdata", "test.xlsx", package = "calamineR")
 if (nzchar(test_file)) {
   rows <- read_sheet_raw(test_file, 1)
   # Returns list of character vectors (one per row)
