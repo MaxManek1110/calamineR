@@ -4,7 +4,7 @@ Version: 0.1.0
 Authors@R: c(
     person("Maximilian", "Manek", email = "maximilian.manek@hotmail.de",
                   role = c("aut", "cre")),
-    person("Juan Antonio Monroy Kuhn", email = "amonroykuhn@gmail.com", role = "aut")
+    person("Juan Antonio Monroy Kuhn", email = "amonroykuhn@gmail.com", role = "aut"),
     person("Johann Tuffe", role = "aut", comment = "calamine Rust library"),
     person("Authors of the dependent Rust crates", role = "aut", comment = "see AUTHORS file")
     )
