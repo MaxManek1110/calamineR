@@ -2,26 +2,30 @@
 
 ## Test environments
 
-* local Ubuntu 22.04, R 4.2.x, Rust 1.75.0
-* GitHub Actions (ubuntu-latest, macOS-latest, windows-latest)
+* Local: Ubuntu 22.04, R 4.2.1, Rust 1.75.0
+* GitHub Actions: ubuntu-latest (R devel, release, oldrel-1), macOS-latest, windows-latest
 * R-hub
 
 ## R CMD check results
 
-0 errors | 0 warnings | 3 notes
+0 errors | 0 warnings | 4 notes
 
 ### Notes explanation:
 
 1. **New submission**: This is a new package.
 
 2. **Hidden files and directories**: The `src/rust/vendor/` directory contains
-   vendored Rust dependencies with `.cargo-checksum.json` files. These are
-   required for offline builds as mandated by CRAN policy for packages with
-   Rust compiled code. See [Using Rust in CRAN Packages](https://cran.r-project.org/web/packages/using_rust.html).
+   vendored Rust dependencies with `.cargo-checksum.json` files and a `.cargo`
+   configuration directory. These are required for offline builds as mandated
+   by CRAN policy for packages with Rust compiled code.
+   See [Using Rust in CRAN Packages](https://cran.r-project.org/web/packages/using_rust.html).
 
 3. **Installed package size (~7Mb)**: This is typical for packages with Rust
-   compiled code. The static library contains optimized, LTO-compiled Rust code.
+   compiled code. The static library contains optimized, release-mode Rust code.
    This is unavoidable for packages using Rust.
+
+4. **Unable to verify current time**: This is a network/system issue during
+   checking, not a package issue.
 
 ## Downstream dependencies
 
@@ -38,3 +42,4 @@ reading. The package follows CRAN guidelines for Rust packages:
 - Build is limited to 2 parallel jobs (CARGO_BUILD_JOBS=2)
 - Rust and cargo versions are reported before building
 - Builds successfully on Linux, macOS, and Windows
+- AUTHORS file documents all contributors including vendored crate authors

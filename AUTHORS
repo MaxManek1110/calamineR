@@ -1,0 +1,48 @@
+# calamineR Authors
+
+## Package Authors
+Maximilian Manek <maximilian.manek@hotmail.de>
+Juan Antonio Monroy Kuhn <amonroykuhn@gmail.com>
+
+## Rust calamine library
+Johann Tuffe <tafia973@gmail.com>
+  https://github.com/tafia/calamine
+
+## Rust extendr framework
+andy-thomason <andy@andythomason.com>
+Thomas Down
+Mossa Merhi Reimert <mossa@sund.ku.dk>
+Claus O. Wilke <wilke@austin.utexas.edu>
+Hiroaki Yutani
+Ilia A. Kosenkov <ilia.kosenkov@outlook.com>
+Michael Milton <michael.r.milton@gmail.com>
+  https://github.com/extendr/extendr
+
+## Additional Vendored Rust Crates
+
+The following Rust crates are vendored in src/rust/vendor/.
+See LICENSE.note for license details.
+
+adler2: Jonas Schievink and contributors
+byteorder: Andrew Gallant
+cfg-if: Alex Crichton
+codepage: Nicolas Silva
+crc32fast: Sam Rijs, Alex Crichton
+crossbeam-utils: The Crossbeam Project Developers
+encoding_rs: Henri Sivonen
+flate2: Alex Crichton, Josh Triplett
+libR-sys: The extendr developers
+log: The Rust Project Developers
+memchr: Andrew Gallant, bluss
+miniz_oxide: Frommi, oyvindln
+once_cell: Aleksey Kladov
+paste: David Tolnay
+proc-macro2: David Tolnay, Alex Crichton
+quick-xml: Johann Tuffe, Mingun
+quote: David Tolnay
+serde: Erick Tryzelaar, David Tolnay
+serde_derive: Erick Tryzelaar, David Tolnay
+simd-adler32: Marvin Countryman
+syn: David Tolnay
+unicode-ident: David Tolnay
+zip: Mathijs van de Nes, Marli Frost, Ryan Levick
