@@ -13,15 +13,10 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(target_family = "windows")]
 use std::os::windows::ffi::OsStringExt;
 
-//
-// Environmental variables
-//
-
 // The environmental variables that are usually set by R. These might be needed
 // to set manually if we compile libR-sys outside of an R session.
 //
 // c.f., https://stat.ethz.ch/R-manual/R-devel/library/base/html/EnvVar.html
-const ENVVAR_R_INCLUDE_DIR: &str = "R_INCLUDE_DIR";
 const ENVVAR_R_HOME: &str = "R_HOME";
 
 // An R version (e.g., "4.1.2" or "4.2.0-devel"). When this is set, the actual R
@@ -30,23 +25,11 @@ const ENVVAR_R_HOME: &str = "R_HOME";
 const ENVVAR_R_VERSION: &str = "LIBRSYS_R_VERSION";
 
 // A path to a dir containing pre-computed bindings (default: "bindings").
-#[cfg(not(feature = "use-bindgen"))]
 const ENVVAR_BINDINGS_PATH: &str = "LIBRSYS_BINDINGS_PATH";
-
-// A path to libclang toolchain. If this is set, the path is added to the
-// compiler arguments on executing bindgen.
-#[cfg(feature = "use-bindgen")]
-const ENVVAR_LIBCLANG_INCLUDE_PATH: &str = "LIBRSYS_LIBCLANG_INCLUDE_PATH";
-
-// A path to an output dir of bindings in addition to the default "bindings"
-// dir. If this is set, generated bindings are also put there.
-#[cfg(feature = "use-bindgen")]
-const ENVVAR_BINDINGS_OUTPUT_PATH: &str = "LIBRSYS_BINDINGS_OUTPUT_PATH";
 
 #[derive(Debug)]
 struct InstallationPaths {
     r_home: PathBuf,
-    include: PathBuf,
     library: PathBuf,
 }
 
@@ -156,14 +139,17 @@ fn byte_array_to_os_string(bytes: &[u8]) -> OsString {
 
 // Execute an R script and return the captured output
 fn r_command<S: AsRef<OsStr>>(r_binary: S, script: &str) -> io::Result<OsString> {
+    // we must use --vanilla,
+    // 1. user Rprofile may contain message into stdout
+    // 2. prevent R startup message
     let out = Command::new(r_binary)
-        .args(&["-s", "-e", script])
+        .args(["-s", "--vanilla", "-e", script])
         .output()?;
 
     // if there are any errors we print them out, helps with debugging
     if !out.stderr.is_empty() {
         println!(
-            "> {}",
+            "cargo:warning={}",
             byte_array_to_os_string(&out.stderr)
                 .as_os_str()
                 .to_string_lossy()
@@ -204,30 +190,6 @@ fn get_r_library(r_home: &Path) -> PathBuf {
     }
 }
 
-// Get the path to the R include directory either from an envvar or by executing the actual R binary.
-fn get_r_include(r_home: &Path, library: &Path) -> io::Result<PathBuf> {
-    // If the environment variable R_INCLUDE_DIR is set we use it
-    if let Some(include) = env::var_os(ENVVAR_R_INCLUDE_DIR) {
-        return Ok(PathBuf::from(include));
-    }
-
-    // Otherwise, we try to execute `R` to find the include dir. Here,
-    // we're using the R home we found earlier, to make sure we're consistent.
-    let r_binary = InstallationPaths {
-        r_home: r_home.to_path_buf(),
-        include: PathBuf::new(), // get_r_binary() doesn't use `include` so fill with an empty PathBuf.
-        library: library.to_path_buf(),
-    }
-    .get_r_binary();
-
-    let rout = r_command(&r_binary, r#"cat(normalizePath(R.home('include')))"#)?;
-    if !rout.is_empty() {
-        Ok(PathBuf::from(rout))
-    } else {
-        Err(Error::new(ErrorKind::Other, "Cannot find R include."))
-    }
-}
-
 fn probe_r_paths() -> io::Result<InstallationPaths> {
     // First we locate the R home
     let r_home = get_r_home()?;
@@ -235,12 +197,8 @@ fn probe_r_paths() -> io::Result<InstallationPaths> {
     // Now the library location. On Windows, it depends on the target architecture
     let library = get_r_library(&r_home);
 
-    // Finally the include location. It may or may not be located under R home
-    let include = get_r_include(&r_home, &library)?;
-
     Ok(InstallationPaths {
         r_home,
-        include,
         library,
     })
 }
@@ -266,7 +224,7 @@ fn parse_r_version(r_version: String) -> Result<RVersionInfo, EnvVarError> {
             // Bad:
             //   - "4.1.foo" (some part contains any non-digit characters)
             //   - "4.1." (some part is missing)
-            if !s.is_empty() && s.chars().all(|c| c.is_digit(10)) {
+            if !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()) {
                 Some(s)
             } else {
                 None
@@ -330,8 +288,8 @@ fn get_r_version_from_r(r_paths: &InstallationPaths) -> Result<RVersionInfo, Env
     // 4.2.0-devel
     // ```
     let out = r_command(
-        &r_binary,
-        r#"cat(sprintf('%s.%s%s\n', R.version$major, R.version$minor, if(isTRUE(grepl('devel', R.version$status, fixed = TRUE))) '-devel' else ''))"#,
+        r_binary,
+        r"cat(sprintf('%s.%s%s\n', R.version$major, R.version$minor, if(isTRUE(grepl('devel', R.version$status, fixed = TRUE))) '-devel' else ''))",
     )
         .map_err(EnvVarError::RInvocationError)?;
 
@@ -368,196 +326,6 @@ fn set_r_version_vars(ver: &RVersionInfo) {
     println!("cargo:r_version_devel={}", ver.devel); // Becomes DEP_R_R_VERSION_DEVEL for clients
 }
 
-#[cfg(feature = "use-bindgen")]
-fn get_non_api() -> std::collections::HashSet<String> {
-    // Several non-APIs are required for extendr-engine, so we explicitly allow
-    // these here. If extendr-engine (or other crate) requires more non-APIs,
-    // add it here with caution.
-    const REQUIRED_NON_API: [&str; 6] = [
-        "R_CStackLimit",
-        "R_CleanTempDir",
-        "R_RunExitFinalizers",
-        "Rf_endEmbeddedR",
-        "Rf_initialize_R",
-        "setup_Rmainloop",
-    ];
-
-    // nonAPI.txt is generated by
-    //
-    //     Rscript -e 'cat(tools:::nonAPI, "\n")' | uniq | sort
-    let non_api = include_str!("./nonAPI.txt")
-        .lines()
-        .filter(|e| !REQUIRED_NON_API.contains(e))
-        .map(|s| s.to_string());
-
-    std::collections::HashSet::from_iter(non_api)
-}
-
-#[cfg(feature = "use-bindgen")]
-/// Generate bindings by calling bindgen.
-fn generate_bindings(r_paths: &InstallationPaths, version_info: &RVersionInfo) {
-    use clang::EntityKind::*;
-    use clang::*;
-    use std::collections::HashSet;
-
-    let clang = Clang::new().unwrap();
-    let index = Index::new(&clang, false, false);
-
-    // Parse wrapper.h
-    let tu = index
-        .parser("wrapper.h")
-        .arguments(&[format!("-I{}", r_paths.include.display())])
-        .skip_function_bodies(true)
-        .detailed_preprocessing_record(true)
-        .parse()
-        .unwrap();
-
-    // Extract all the AST entities into `e`, as well as listing up all the
-    // include files in a chain into `include_files`.
-    let r_ast_entities: HashSet<_> = tu
-        .get_entity()
-        .get_children()
-        .into_iter()
-        .filter(|x| !x.is_in_system_header())
-        .collect();
-
-    // Put all the symbols into allowlist
-    let mut allowlist: HashSet<_> = r_ast_entities
-        .into_iter()
-        .filter(|e| {
-            // skip unnamed items
-            // this occurs on llvm 16.0.0, see
-            // https://github.com/rust-lang/rust-bindgen/issues/2488
-            // and this is how it is decided to check for this
-            !e.is_anonymous()
-        })
-        .flat_map(|e| match e.get_kind() {
-            EnumDecl | FunctionDecl | StructDecl | TypedefDecl | VarDecl | UnionDecl
-            | MacroDefinition | MacroExpansion => e.get_name(),
-            _ => None,
-        })
-        .collect();
-
-    // This cannot be detected because the #define-ed constants are aliased in another #define
-    // c.f. https://github.com/wch/r-source/blob/9f284035b7e503aebe4a804579e9e80a541311bb/src/include/R_ext/GraphicsEngine.h#L93
-    allowlist.insert("R_GE_version".to_string());
-
-    // Join into a regex pattern to supply into bindgen::Builder.
-    let allowlist_pattern = allowlist
-        // Exclude non-API calls
-        .difference(&get_non_api())
-        .cloned()
-        .collect::<Vec<_>>();
-    let allowlist_pattern = allowlist_pattern.join("|");
-
-    // The bindgen::Builder is the main entry point
-    // to bindgen, and lets you build up options for
-    // the resulting bindings.
-    let mut bindgen_builder = bindgen::Builder::default()
-        .allowlist_function(&allowlist_pattern)
-        .allowlist_var(&allowlist_pattern)
-        .allowlist_type(&allowlist_pattern)
-        .translate_enum_integer_types(true)
-        // The input header we would like to generate
-        // bindings for.
-        .header("wrapper.h")
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks));
-
-    let target = env::var("TARGET").expect("Could not get the target triple");
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-
-    println!(
-        "Generating bindings for target: {target}, os: {target_os}, architecture: {target_arch}"
-    );
-
-    // Point to the correct headers
-    bindgen_builder = bindgen_builder.clang_args(&[
-        format!("-I{}", r_paths.include.display()),
-        format!("--target={target}"),
-    ]);
-
-    // allow injection of an alternative include path to libclang
-    if let Some(alt_include) = env::var_os(ENVVAR_LIBCLANG_INCLUDE_PATH) {
-        bindgen_builder =
-            bindgen_builder.clang_arg(format!("-I{}", PathBuf::from(alt_include).display()));
-    }
-
-    // Remove constants defined by C-headers as
-    // there are rust equivalents for them.
-    let bindgen_builder = bindgen_builder
-        .blocklist_item("M_E")
-        .blocklist_item("M_LOG2E")
-        .blocklist_item("M_LOG10E")
-        .blocklist_item("M_LN2")
-        .blocklist_item("M_LN10")
-        .blocklist_item("M_PI")
-        .blocklist_item("M_PI_2")
-        .blocklist_item("M_PI_4")
-        .blocklist_item("M_1_PI")
-        .blocklist_item("M_2_PI")
-        .blocklist_item("M_2_SQRTPI")
-        .blocklist_item("M_SQRT2")
-        .blocklist_item("M_SQRT1_2");
-
-    // `VECTOR_PTR` is deprecated, use `DATAPTR` and friends instead
-    let bindgen_builder = bindgen_builder.blocklist_item("VECTOR_PTR");
-
-    // Finish the builder and generate the bindings.
-    let bindings = bindgen_builder
-        .raw_line(format!(
-            "/* libR-sys version: {} */",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .raw_line(format!(
-            "/* bindgen clang version: {} */",
-            bindgen::clang_version().full
-        ))
-        .raw_line(format!("/* clang-rs version: {} */", clang::get_version()))
-        .raw_line(format!("/* r version: {} */", version_info.full))
-        .generate_comments(true)
-        .parse_callbacks(Box::new(TrimCommentsCallbacks))
-        .clang_arg("-fparse-all-comments")
-        .generate()
-        // Unwrap the Result and panic on failure.
-        .expect("Unable to generate bindings");
-
-    bindings.emit_warnings();
-
-    // Write the bindings to the $OUT_DIR/bindings.rs file.
-    let out_path = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings to default output path!");
-
-    // Also write the bindings to a folder specified by `LIBRSYS_BINDINGS_OUTPUT_PATH`, if defined
-    if let Some(alt_target) = env::var_os(ENVVAR_BINDINGS_OUTPUT_PATH) {
-        let out_path = PathBuf::from(alt_target);
-        // if folder doesn't exist, try to create it
-        if !out_path.exists() {
-            fs::create_dir(&out_path).expect(&format!(
-                "Couldn't create output directory for bindings: {}",
-                out_path.display()
-            ));
-        }
-
-        let bindings_file_full = version_info.get_r_bindings_filename(&target_os, &target_arch);
-        let out_file = out_path.join(bindings_file_full);
-
-        bindings
-            .write_to_file(&out_file)
-            .expect(&format!("Couldn't write bindings: {}", out_file.display()));
-    } else {
-        println!(
-            "Warning: Couldn't write the bindings since `LIBRSYS_BINDINGS_OUTPUT_PATH` is not set."
-        );
-    }
-}
-
-#[cfg(not(feature = "use-bindgen"))]
 /// Retrieve bindings from cache, if available. Errors out otherwise.
 fn retrieve_prebuild_bindings(version_info: &RVersionInfo) {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
@@ -580,7 +348,7 @@ fn retrieve_prebuild_bindings(version_info: &RVersionInfo) {
             )
         } else {
             println!(
-                "Warning: using generic {}-{} libR-sys bindings. These may not work for R {}.{}.{}{}.",
+                "cargo:warning=using generic {}-{} libR-sys bindings. These may not work for R {}.{}.{}{}.",
                 target_os, target_arch, version_info.major, version_info.minor, version_info.patch, version_info.devel
             );
         }
@@ -594,26 +362,16 @@ fn retrieve_prebuild_bindings(version_info: &RVersionInfo) {
     println!("cargo:rerun-if-changed={}", from.display());
 }
 
-/// Provide extra cleaning of the processed elements in the headers.
-#[cfg(feature = "use-bindgen")]
-#[derive(Debug)]
-struct TrimCommentsCallbacks;
-
-#[cfg(feature = "use-bindgen")]
-impl bindgen::callbacks::ParseCallbacks for TrimCommentsCallbacks {
-    fn process_comment(&self, comment: &str) -> Option<String> {
-        let trim_comment = comment.trim();
-        Some(trim_comment.to_string())
-    }
-}
-
 fn main() {
     let r_paths = probe_r_paths();
 
     let r_paths = match r_paths {
         Ok(result) => result,
         Err(error) => {
-            println!("Problem locating local R install: {:?}", error);
+            println!(
+                "cargo:warning=Problem locating local R install: {:?}",
+                error
+            );
             exit(1);
         }
     };
@@ -638,8 +396,5 @@ fn main() {
         get_r_version(ENVVAR_R_VERSION, &r_paths).expect("Could not obtain R version");
     set_r_version_vars(&version_info);
 
-    #[cfg(feature = "use-bindgen")]
-    generate_bindings(&r_paths, &version_info);
-    #[cfg(not(feature = "use-bindgen"))]
     retrieve_prebuild_bindings(&version_info);
 }

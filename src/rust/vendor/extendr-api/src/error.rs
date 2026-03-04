@@ -1,9 +1,10 @@
 //! Error handling in Rust called from R.
 
+use std::convert::Infallible;
+
+use crate::conversions::try_into_int::ConversionError;
 use crate::robj::Types;
 use crate::{throw_r_error, Robj};
-
-use std::convert::Infallible;
 
 /// Throw an R error if a result is an error.
 #[doc(hidden)]
@@ -70,14 +71,16 @@ pub enum Error {
 
     OutOfRange(Robj),
     MustNotBeNA(Robj),
+    ExpectedWholeNumber(Robj, ConversionError),
     ExpectedNonZeroLength(Robj),
-    ExpectedWholeNumber(Robj),
     OutOfLimits(Robj),
     TypeMismatch(Robj),
     NamespaceNotFound(Robj),
     NoGraphicsDevices(Robj),
 
     ExpectedExternalPtrType(Robj, String),
+    ExpectedExternalNonNullPtr(Robj),
+    ExpectedExternalPtrReference,
     Other(String),
 
     #[cfg(feature = "ndarray")]
@@ -147,13 +150,6 @@ impl std::fmt::Display for Error {
             Error::OutOfRange(_robj) => write!(f, "Out of range."),
             Error::MustNotBeNA(_robj) => write!(f, "Must not be NA."),
             Error::ExpectedNonZeroLength(_robj) => write!(f, "Expected non zero length"),
-            Error::ExpectedWholeNumber(robj) => {
-                write!(
-                    f,
-                    "Expected an integer or a float representing a whole number, got {:?}",
-                    robj
-                )
-            }
             Error::OutOfLimits(robj) => write!(f, "The value is too big: {:?}", robj),
             Error::TypeMismatch(_robj) => write!(f, "Type mismatch"),
 
@@ -161,8 +157,26 @@ impl std::fmt::Display for Error {
             Error::ExpectedExternalPtrType(_robj, type_name) => {
                 write!(f, "Incorrect external pointer type {}", type_name)
             }
+            Error::ExpectedExternalNonNullPtr(robj) => {
+                write!(
+                    f,
+                    "expected non-null pointer in externalptr, instead {:?}",
+                    robj
+                )
+            }
+            Error::ExpectedExternalPtrReference => {
+                write!(f, "It is only possible to return a reference to self.")
+            }
             Error::NoGraphicsDevices(_robj) => write!(f, "No graphics devices active."),
             Error::Other(str) => write!(f, "{}", str),
+
+            Error::ExpectedWholeNumber(robj, conversion_error) => {
+                write!(
+                    f,
+                    "Failed to convert a float to a whole number: {}. Actual value received: {:?}",
+                    conversion_error, robj
+                )
+            }
 
             #[cfg(feature = "ndarray")]
             Error::NDArrayShapeError(shape_error) => {

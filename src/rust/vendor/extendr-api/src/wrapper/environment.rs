@@ -80,15 +80,17 @@ impl Environment {
         }
     }
 
+    #[cfg(feature = "non-api")]
     /// Set the enclosing (parent) environment.
     pub fn set_parent(&mut self, parent: Environment) -> &mut Self {
         single_threaded(|| unsafe {
-            let sexp = self.robj.get();
+            let sexp = self.robj.get_mut();
             SET_ENCLOS(sexp, parent.robj.get());
         });
         self
     }
 
+    #[cfg(feature = "non-api")]
     /// Get the environment flags.
     pub fn envflags(&self) -> i32 {
         unsafe {
@@ -97,15 +99,17 @@ impl Environment {
         }
     }
 
+    #[cfg(feature = "non-api")]
     /// Set the environment flags.
-    pub fn set_envflags(&mut self, flags: i32) -> &mut Self {
-        unsafe {
-            let sexp = self.robj.get();
-            SET_ENVFLAGS(sexp, flags)
-        }
+    pub unsafe fn set_envflags(&mut self, flags: i32) -> &mut Self {
+        single_threaded(|| unsafe {
+            let sexp = self.robj.get_mut();
+            SET_ENVFLAGS(sexp, flags);
+        });
         self
     }
 
+    #[cfg(feature = "non-api")]
     /// Iterate over an environment.
     pub fn iter(&self) -> EnvIter {
         unsafe {
@@ -125,6 +129,7 @@ impl Environment {
         }
     }
 
+    #[cfg(feature = "non-api")]
     /// Get the names in an environment.
     /// ```
     /// use extendr_api::prelude::*;
@@ -170,13 +175,7 @@ impl Environment {
     pub fn local<K: Into<Robj>>(&self, key: K) -> Result<Robj> {
         let key = key.into();
         if key.is_symbol() {
-            unsafe {
-                Ok(Robj::from_sexp(Rf_findVarInFrame3(
-                    self.get(),
-                    key.get(),
-                    1,
-                )))
-            }
+            unsafe { Ok(Robj::from_sexp(Rf_findVarInFrame(self.get(), key.get()))) }
         } else {
             Err(Error::NotFound(key))
         }
@@ -185,27 +184,6 @@ impl Environment {
 
 /// Iterator over the names and values of an environment
 ///
-/// ```
-/// use extendr_api::prelude::*;
-/// test! {
-///     let names_and_values = (0..100).map(|i| (format!("n{}", i), i));
-///     let env = Environment::from_pairs(global_env(), names_and_values);
-///     let robj = r!(env);
-///     let names_and_values = robj.as_environment().unwrap().iter().collect::<Vec<_>>();
-///     assert_eq!(names_and_values.len(), 100);
-///
-///     let small_env = Environment::new_with_capacity(global_env(), 1);
-///     small_env.set_local(sym!(x), 1);
-///     let names_and_values = small_env.as_environment().unwrap().iter().collect::<Vec<_>>();
-///     assert_eq!(names_and_values, vec![("x", r!(1))]);
-///
-///     let large_env = Environment::new_with_capacity(global_env(), 1000);
-///     large_env.set_local(sym!(x), 1);
-///     let names_and_values = large_env.as_environment().unwrap().iter().collect::<Vec<_>>();
-///     assert_eq!(names_and_values, vec![("x", r!(1))]);
-/// }
-///
-/// ```
 #[derive(Clone)]
 pub struct EnvIter {
     hash_table: ListIter,

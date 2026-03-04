@@ -51,7 +51,7 @@
 // * Wrappers and init functions for all methods.
 // * A single init function that calls the other init functions for the methods.
 // * An input conversion from an external pointer to a reference and a move of that type.
-// * An output converstion from that type to an owned external pointer object.
+// * An output conversion from that type to an owned external pointer object.
 // * A finalizer for that type to free memory allocated.
 
 #[allow(non_snake_case)]
@@ -61,6 +61,7 @@ mod dataframe;
 mod extendr_function;
 mod extendr_impl;
 mod extendr_module;
+mod extendr_options;
 mod list;
 mod list_struct;
 mod pairlist;
@@ -71,23 +72,37 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Item};
 
+/// The `#[extendr]`-macro may be placed on three items
+///
+/// - `fn` for wrapped rust-functions, see [`extendr-fn`]
+/// - `impl`-blocks, see [`extendr-impl`]
+///
+/// [`extendr-fn`]: ./extendr_function/fn.extendr_function.html
+/// [`extendr-impl`]: ./extendr_impl/fn.extendr_impl.html
+///
+/// There is also [`macro@extendr_module`], which is used for defining what rust
+/// wrapped items should be visible to the surrounding R-package.
+///
 #[proc_macro_attribute]
 pub fn extendr(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut opts = wrappers::ExtendrOptions::default();
+    let mut opts = extendr_options::ExtendrOptions::default();
 
     let extendr_opts_parser = syn::meta::parser(|meta| opts.parse(meta));
     parse_macro_input!(attr with extendr_opts_parser);
 
     match parse_macro_input!(item as Item) {
         Item::Fn(func) => extendr_function::extendr_function(func, &opts),
-        Item::Impl(item_impl) => extendr_impl::extendr_impl(item_impl),
+        Item::Impl(item_impl) => match extendr_impl::extendr_impl(item_impl, &opts) {
+            Ok(result) => result,
+            Err(e) => e.into_compile_error().into(),
+        },
         other_item => TokenStream::from(quote! {#other_item}),
     }
 }
 
 /// Define a module and export symbols to R
 /// Example:
-///```ignore
+///```dont_run
 /// extendr_module! {
 ///     mod name;
 ///     fn my_func1;
@@ -97,7 +112,7 @@ pub fn extendr(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// Outputs:
 ///
-/// ```ignore
+/// ```dont_run
 /// #[no_mangle]
 /// #[allow(non_snake_case)]
 /// pub extern "C" fn R_init_hello_extendr(info: *mut extendr_api::DllInfo) {
@@ -131,7 +146,7 @@ pub fn list(item: TokenStream) -> TokenStream {
 
 /// Call a function or primitive defined by a text expression with arbitrary parameters.
 /// This currently works by parsing and evaluating the string in R, but will probably acquire
-/// some shortcuts for simple expessions, for example by caching symbols and constant values.
+/// some shortcuts for simple expressions, for example by caching symbols and constant values.
 ///
 /// ```ignore
 ///     assert_eq!(call!("`+`", 1, 2), r!(3));
@@ -201,9 +216,16 @@ pub fn Rraw(item: TokenStream) -> TokenStream {
 /// # }
 /// # Ok::<(), extendr_api::Error>(())
 /// ```
+///
+/// See [`IntoRobj`] for converting arbitrary Rust types into R type by using
+/// R's list / `List`.
+///
 #[proc_macro_derive(TryFromRobj)]
 pub fn derive_try_from_robj(item: TokenStream) -> TokenStream {
-    list_struct::derive_try_from_robj(item)
+    match list_struct::derive_try_from_robj(item) {
+        Ok(result) => result,
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
 /// Derives an implementation of `From<Struct> for Robj` and `From<&Struct> for Robj` on this struct.
@@ -233,7 +255,13 @@ pub fn derive_try_from_robj(item: TokenStream) -> TokenStream {
 /// # }
 /// # Ok::<(), extendr_api::Error>(())
 /// ```
+///
+/// See [`TryFromRobj`] for a `derive`-macro in the other direction, i.e.
+/// instantiation of a rust type, by an R list with fields corresponding to
+/// said type.
+///
 /// # Details
+///
 /// Note, the `From<Struct> for Robj` behaviour is different from what is obtained by applying the standard `#[extendr]` macro
 /// to an `impl` block. The `#[extendr]` behaviour returns to R a **pointer** to Rust memory, and generates wrapper functions for calling
 /// Rust functions on that pointer. The implementation from `#[derive(IntoRobj)]` actually converts the Rust structure
@@ -241,7 +269,10 @@ pub fn derive_try_from_robj(item: TokenStream) -> TokenStream {
 /// and converting it back to Rust will produce a copy of the original struct.
 #[proc_macro_derive(IntoRobj)]
 pub fn derive_into_robj(item: TokenStream) -> TokenStream {
-    list_struct::derive_into_robj(item)
+    match list_struct::derive_into_robj(item) {
+        Ok(result) => result,
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
 /// Enable the construction of dataframes from arrays of structures.
@@ -264,7 +295,6 @@ pub fn derive_into_robj(item: TokenStream) -> TokenStream {
 /// assert_eq!(df[0], r!([0, 1]));
 /// assert_eq!(df[1], r!(["abc", "xyz"]));
 /// ```
-
 #[proc_macro_derive(IntoDataFrameRow)]
 pub fn derive_into_dataframe(item: TokenStream) -> TokenStream {
     dataframe::derive_into_dataframe(item)

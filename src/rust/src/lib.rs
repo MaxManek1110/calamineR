@@ -924,7 +924,7 @@ fn cal_read_sheet_df(path: &str, sheet: Robj, col_names: bool, skip: i32, fill_m
                     let val = row.get(col_idx).unwrap_or(&Data::Empty);
                     doubles.set_elt(row_idx, cell_to_rdate(val));
                 }
-                let robj = doubles.into_robj();
+                let mut robj = doubles.into_robj();
                 robj.set_class(&["Date"]).ok();
                 robj
             }
@@ -1114,7 +1114,7 @@ fn cell_to_rstr(cell: &Data) -> Rstr {
 /// @export
 #[extendr]
 fn cal_merge_regions(path: &str, sheet: Robj) -> Result<List> {
-    let mut workbook = open_workbook_auto(path)
+    let workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
     let sheet_names = workbook.sheet_names().to_vec();

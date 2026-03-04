@@ -9,19 +9,22 @@
 //! * The interface should be friendly to R users without Rust experience.
 //!
 
-use libR_sys::*;
-use prelude::{c64, Rcplx};
-use std::os::raw;
-
-use crate::*;
-
-use crate::scalar::{Rbool, Rfloat, Rint};
 use std::collections::HashMap;
 use std::iter::IntoIterator;
 use std::ops::{Range, RangeInclusive};
+use std::os::raw;
 
-// deprecated
-mod from_robj;
+use libR_sys::*;
+use SEXPTYPE::*;
+
+pub use into_robj::*;
+pub use iter::*;
+pub use operators::Operators;
+use prelude::{c64, Rcplx};
+pub use rinternals::Rinternals;
+
+use crate::scalar::{Rbool, Rfloat, Rint};
+use crate::*;
 
 mod debug;
 mod into_robj;
@@ -31,13 +34,6 @@ mod try_from_robj;
 
 #[cfg(test)]
 mod tests;
-
-pub use from_robj::*;
-pub use into_robj::*;
-pub use iter::*;
-pub use operators::Operators;
-pub use operators::*;
-pub use rinternals::Rinternals;
 
 /// Wrapper for an R S-expression pointer (SEXP).
 ///
@@ -132,6 +128,8 @@ pub trait GetSexp {
     /// Access to a raw SEXP pointer can cause undefined behaviour and is not thread safe.
     unsafe fn get(&self) -> SEXP;
 
+    unsafe fn get_mut(&mut self) -> SEXP;
+
     /// Get a reference to a Robj for this type.
     fn as_robj(&self) -> &Robj;
 
@@ -141,6 +139,10 @@ pub trait GetSexp {
 
 impl GetSexp for Robj {
     unsafe fn get(&self) -> SEXP {
+        self.inner
+    }
+
+    unsafe fn get_mut(&mut self) -> SEXP {
         self.inner
     }
 
@@ -159,7 +161,7 @@ pub trait Slices: GetSexp {
     /// # Safety
     ///
     /// Unless the type is correct, this will cause undefined behaviour.
-    /// Creating this slice will also instatiate and Altrep objects.
+    /// Creating this slice will also instantiate an Altrep objects.
     unsafe fn as_typed_slice_raw<T>(&self) -> &[T] {
         let len = XLENGTH(self.get()) as usize;
         let data = DATAPTR_RO(self.get()) as *const T;
@@ -171,11 +173,11 @@ pub trait Slices: GetSexp {
     /// # Safety
     ///
     /// Unless the type is correct, this will cause undefined behaviour.
-    /// Creating this slice will also instatiate and Altrep objects.
-    /// Not all obejects (especially not list and strings) support this.
+    /// Creating this slice will also instantiate Altrep objects.
+    /// Not all objects (especially not list and strings) support this.
     unsafe fn as_typed_slice_raw_mut<T>(&mut self) -> &mut [T] {
         let len = XLENGTH(self.get()) as usize;
-        let data = DATAPTR(self.get()) as *mut T;
+        let data = DATAPTR(self.get_mut()) as *mut T;
         std::slice::from_raw_parts_mut(data, len)
     }
 }
@@ -230,8 +232,8 @@ impl Robj {
 pub trait Types: GetSexp {
     #[doc(hidden)]
     /// Get the XXXSXP type of the object.
-    fn sexptype(&self) -> u32 {
-        unsafe { TYPEOF(self.get()) as u32 }
+    fn sexptype(&self) -> SEXPTYPE {
+        unsafe { TYPEOF(self.get()) }
     }
 
     /// Get the type of an R object.
@@ -244,8 +246,6 @@ pub trait Types: GetSexp {
     ///     assert_eq!(R!("function() {}")?.rtype(), Rtype::Function);
     ///     assert_eq!(Environment::new_with_parent(global_env()).rtype(), Rtype::Environment);
     ///     assert_eq!(lang!("+", 1, 2).rtype(), Rtype::Language);
-    ///     assert_eq!(r!(Primitive::from_string("if")).rtype(), Rtype::Special);
-    ///     assert_eq!(r!(Primitive::from_string("+")).rtype(), Rtype::Builtin);
     ///     assert_eq!(r!(Rstr::from_string("hello")).rtype(), Rtype::Rstr);
     ///     assert_eq!(r!(TRUE).rtype(), Rtype::Logicals);
     ///     assert_eq!(r!(1).rtype(), Rtype::Integers);
@@ -257,6 +257,7 @@ pub trait Types: GetSexp {
     /// }
     /// ```
     fn rtype(&self) -> Rtype {
+        use SEXPTYPE::*;
         match self.sexptype() {
             NILSXP => Rtype::Null,
             SYMSXP => Rtype::Symbol,
@@ -281,12 +282,16 @@ pub trait Types: GetSexp {
             EXTPTRSXP => Rtype::ExternalPtr,
             WEAKREFSXP => Rtype::WeakRef,
             RAWSXP => Rtype::Raw,
+            #[cfg(not(use_objsxp))]
             S4SXP => Rtype::S4,
+            #[cfg(use_objsxp)]
+            OBJSXP => Rtype::S4,
             _ => Rtype::Unknown,
         }
     }
 
     fn as_any(&self) -> Rany {
+        use SEXPTYPE::*;
         unsafe {
             match self.sexptype() {
                 NILSXP => Rany::Null(std::mem::transmute(self.as_robj())),
@@ -312,7 +317,10 @@ pub trait Types: GetSexp {
                 EXTPTRSXP => Rany::ExternalPtr(std::mem::transmute(self.as_robj())),
                 WEAKREFSXP => Rany::WeakRef(std::mem::transmute(self.as_robj())),
                 RAWSXP => Rany::Raw(std::mem::transmute(self.as_robj())),
+                #[cfg(not(use_objsxp))]
                 S4SXP => Rany::S4(std::mem::transmute(self.as_robj())),
+                #[cfg(use_objsxp)]
+                OBJSXP => Rany::S4(std::mem::transmute(self.as_robj())),
                 _ => Rany::Unknown(std::mem::transmute(self.as_robj())),
             }
         }
@@ -340,12 +348,16 @@ impl Robj {
         } else {
             unsafe {
                 let sexp = self.get();
+                use SEXPTYPE::*;
                 match self.sexptype() {
                     STRSXP => STRING_ELT(sexp, 0) == libR_sys::R_NaString,
                     INTSXP => *(INTEGER(sexp)) == libR_sys::R_NaInt,
                     LGLSXP => *(LOGICAL(sexp)) == libR_sys::R_NaInt,
                     REALSXP => R_IsNA(*(REAL(sexp))) != 0,
                     CPLXSXP => R_IsNA((*COMPLEX(sexp)).r) != 0,
+                    // a character vector contains `CHARSXP`, and thus you
+                    // seldom have `Robj`'s that are `CHARSXP` themselves
+                    CHARSXP => sexp == libR_sys::R_NaString,
                     _ => false,
                 }
             }
@@ -581,18 +593,19 @@ impl Robj {
     /// ```
     pub fn as_str<'a>(&self) -> Option<&'a str> {
         unsafe {
-            match self.sexptype() {
+            let charsxp = match self.sexptype() {
                 STRSXP => {
+                    // only allows scalar strings
                     if self.len() != 1 {
-                        None
-                    } else {
-                        Some(to_str(R_CHAR(STRING_ELT(self.get(), 0)) as *const u8))
+                        return None;
                     }
+                    STRING_ELT(self.get(), 0)
                 }
-                // CHARSXP => Some(to_str(R_CHAR(self.get()) as *const u8)),
-                // SYMSXP => Some(to_str(R_CHAR(PRINTNAME(self.get())) as *const u8)),
-                _ => None,
-            }
+                CHARSXP => self.get(),
+                SYMSXP => PRINTNAME(self.get()),
+                _ => return None,
+            };
+            rstr::charsxp_to_str(charsxp)
         }
     }
 
@@ -770,7 +783,7 @@ macro_rules! make_typed_slice {
                 match self.sexptype() {
                     $( $sexp )|* => {
                         unsafe {
-                            let ptr = $fn(self.get()) as *mut $type;
+                            let ptr = $fn(self.get_mut()) as *mut $type;
                             Some(std::slice::from_raw_parts_mut(ptr, self.len()))
                         }
                     }
@@ -783,24 +796,25 @@ macro_rules! make_typed_slice {
 
 make_typed_slice!(Rbool, INTEGER, LGLSXP);
 make_typed_slice!(i32, INTEGER, INTSXP);
-make_typed_slice!(u32, INTEGER, INTSXP);
 make_typed_slice!(Rint, INTEGER, INTSXP);
 make_typed_slice!(f64, REAL, REALSXP);
 make_typed_slice!(Rfloat, REAL, REALSXP);
 make_typed_slice!(u8, RAW, RAWSXP);
-make_typed_slice!(Rstr, STRING_PTR, STRSXP);
+make_typed_slice!(Rstr, STRING_PTR_RO, STRSXP);
 make_typed_slice!(c64, COMPLEX, CPLXSXP);
 make_typed_slice!(Rcplx, COMPLEX, CPLXSXP);
 make_typed_slice!(Rcomplex, COMPLEX, CPLXSXP);
 
-/// These are helper functions which give access to common properties of R objects.
+/// Provides access to the attributes of an R object.
+///
+/// The `Attribute` trait provides a consistent interface to getting, setting, and checking for the presence of attributes in an R object.
+///
 #[allow(non_snake_case)]
 pub trait Attributes: Types + Length {
-    /// Get a specific attribute as a borrowed robj if it exists.
+    /// Get a specific attribute as a borrowed `Robj` if it exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
-    ///
     ///    let mut robj = r!("hello");
     ///    robj.set_attrib(sym!(xyz), 1);
     ///    assert_eq!(robj.get_attrib(sym!(xyz)), Some(r!(1)));
@@ -812,9 +826,10 @@ pub trait Attributes: Types + Length {
         Robj: From<N> + 'a,
     {
         let name = Robj::from(name);
-        if self.sexptype() == CHARSXP {
+        if self.sexptype() == SEXPTYPE::CHARSXP {
             None
         } else {
+            // FIXME: this attribute does not need protection
             let res = unsafe { Robj::from_sexp(Rf_getAttrib(self.get(), name.get())) };
             if res.is_null() {
                 None
@@ -831,25 +846,26 @@ pub trait Attributes: Types + Length {
         Robj: From<N> + 'a,
     {
         let name = Robj::from(name);
-        if self.sexptype() == CHARSXP {
+        if self.sexptype() == SEXPTYPE::CHARSXP {
             false
         } else {
             unsafe { Rf_getAttrib(self.get(), name.get()) != R_NilValue }
         }
     }
 
-    /// Set a specific attribute and return the object.
+    /// Set a specific attribute in-place and return the object.
     ///
     /// Note that some combinations of attributes are illegal and this will
     /// return an error.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
-    ///    let mut robj = r!("hello").set_attrib(sym!(xyz), 1)?;
+    ///    let mut robj = r!("hello");
+    ///    robj.set_attrib(sym!(xyz), 1)?;
     ///    assert_eq!(robj.get_attrib(sym!(xyz)), Some(r!(1)));
     /// }
     /// ```
-    fn set_attrib<N, V>(&self, name: N, value: V) -> Result<Robj>
+    fn set_attrib<N, V>(&mut self, name: N, value: V) -> Result<&mut Self>
     where
         N: Into<Robj>,
         V: Into<Robj>,
@@ -857,15 +873,14 @@ pub trait Attributes: Types + Length {
         let name = name.into();
         let value = value.into();
         unsafe {
-            let sexp = self.get();
-            single_threaded(|| {
-                catch_r_error(|| Rf_setAttrib(sexp, name.get(), value.get()))
-                    .map(|_| Robj::from_sexp(sexp))
-            })
+            let sexp = self.get_mut();
+            let result =
+                single_threaded(|| catch_r_error(|| Rf_setAttrib(sexp, name.get(), value.get())));
+            result.map(|_| self)
         }
     }
 
-    /// Get the names attribute as a string iterator if one exists.
+    /// Get the `names` attribute as a string iterator if one exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -882,12 +897,12 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Return true if this object has names.
+    /// Return true if this object has an attribute called `names`.
     fn has_names(&self) -> bool {
         self.has_attrib(wrapper::symbol::names_symbol())
     }
 
-    /// Set the names attribute from a string iterator.
+    /// Set the `names` attribute from a string iterator.
     ///
     /// Returns `Error::NamesLengthMismatch` if the length of the names does
     /// not match the length of the object.
@@ -895,12 +910,13 @@ pub trait Attributes: Types + Length {
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
-    ///     let mut obj = r!([1, 2, 3]).set_names(&["a", "b", "c"]).unwrap();
+    ///     let mut obj = r!([1, 2, 3]);
+    ///     obj.set_names(&["a", "b", "c"]).unwrap();
     ///     assert_eq!(obj.names().unwrap().collect::<Vec<_>>(), vec!["a", "b", "c"]);
     ///     assert_eq!(r!([1, 2, 3]).set_names(&["a", "b"]), Err(Error::NamesLengthMismatch(r!(["a", "b"]))));
     /// }
     /// ```
-    fn set_names<T>(&mut self, names: T) -> Result<Robj>
+    fn set_names<T>(&mut self, names: T) -> Result<&mut Self>
     where
         T: IntoIterator,
         T::IntoIter: ExactSizeIterator,
@@ -917,7 +933,7 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Get the dim attribute as an integer iterator if one exists.
+    /// Get the `dim` attribute as an integer iterator if one exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -935,7 +951,7 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Get the dimnames attribute as a list iterator if one exists.
+    /// Get the `dimnames` attribute as a list iterator if one exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -952,7 +968,7 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Get the class attribute as a string iterator if one exists.
+    /// Get the `class` attribute as a string iterator if one exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -969,19 +985,20 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Set the class attribute from a string iterator, returning
-    /// a new object.
+    /// Set the `class` attribute from a string iterator, and return the same
+    /// object.
     ///
     /// May return an error for some class names.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
-    ///     let mut obj = r!([1, 2, 3]).set_class(&["a", "b", "c"])?;
+    ///     let mut obj = r!([1, 2, 3]);
+    ///     obj.set_class(&["a", "b", "c"])?;
     ///     assert_eq!(obj.class().unwrap().collect::<Vec<_>>(), vec!["a", "b", "c"]);
     ///     assert_eq!(obj.inherits("a"), true);
     /// }
     /// ```
-    fn set_class<T>(&self, class: T) -> Result<Robj>
+    fn set_class<T>(&mut self, class: T) -> Result<&mut Self>
     where
         T: IntoIterator,
         T::IntoIter: ExactSizeIterator,
@@ -991,7 +1008,8 @@ pub trait Attributes: Types + Length {
         self.set_attrib(wrapper::symbol::class_symbol(), iter.collect_robj())
     }
 
-    /// Return true if this class inherits this class.
+    /// Return true if this object has this class attribute.
+    /// Implicit classes are not supported.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -1007,7 +1025,7 @@ pub trait Attributes: Types + Length {
         }
     }
 
-    /// Get the levels attribute as a string iterator if one exists.
+    /// Get the `levels` attribute as a string iterator if one exists.
     /// ```
     /// use extendr_api::prelude::*;
     /// test! {
@@ -1057,23 +1075,9 @@ impl PartialEq<Robj> for Robj {
             }
 
             // see https://github.com/hadley/r-internals/blob/master/misc.md
-            R_compute_identical(self.get(), rhs.get(), 16) != 0
+            R_compute_identical(self.get(), rhs.get(), 16) != Rboolean::FALSE
         }
     }
-}
-
-// Internal utf8 to str conversion.
-// Lets not worry about non-ascii/unicode strings for now (or ever).
-pub(crate) unsafe fn to_str<'a>(ptr: *const u8) -> &'a str {
-    let mut len = 0;
-    loop {
-        if *ptr.offset(len) == 0 {
-            break;
-        }
-        len += 1;
-    }
-    let slice = std::slice::from_raw_parts(ptr, len as usize);
-    std::str::from_utf8_unchecked(slice)
 }
 
 /// Release any owned objects.

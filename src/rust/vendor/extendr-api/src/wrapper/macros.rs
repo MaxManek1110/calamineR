@@ -9,9 +9,21 @@ macro_rules! gen_vector_wrapper_impl {
         doc_name: $doc_name : ident,
         altrep_constructor: $altrep_constructor : ident,
     ) => {
+
+        impl Attributes for $type {}
+
         impl Default for $type {
             fn default() -> Self {
                 $type::new(0)
+            }
+        }
+
+        impl From<Option<$type>> for Robj {
+            fn from(value: Option<$type>) -> Self {
+                match value {
+                    None => nil_value(),
+                    Some(value) => value.into(),
+                }
             }
         }
 

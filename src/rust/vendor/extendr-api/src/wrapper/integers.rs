@@ -20,6 +20,7 @@ pub struct Integers {
     pub(crate) robj: Robj,
 }
 
+use libR_sys::SEXPTYPE::INTSXP;
 crate::wrapper::macros::gen_vector_wrapper_impl!(
     vector_type: Integers, // Implements for
     scalar_type: Rint,     // Element type
@@ -53,9 +54,9 @@ impl Integers {
 // TODO: this should be a trait.
 impl Integers {
     pub fn set_elt(&mut self, index: usize, val: Rint) {
-        unsafe {
+        single_threaded(|| unsafe {
             SET_INTEGER_ELT(self.get(), index as R_xlen_t, val.inner());
-        }
+        })
     }
 }
 
@@ -75,7 +76,7 @@ impl DerefMut for Integers {
     /// Treat Integers as if it is a mutable slice, like `Vec<Rint>`
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            let ptr = DATAPTR(self.get()) as *mut Rint;
+            let ptr = DATAPTR(self.get_mut()) as *mut Rint;
             std::slice::from_raw_parts_mut(ptr, self.len())
         }
     }
@@ -95,14 +96,13 @@ impl TryFrom<Vec<i32>> for Integers {
     type Error = Error;
 
     fn try_from(value: Vec<i32>) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            robj: <Robj>::try_from(value)?,
-        })
+        Ok(Self { robj: value.into() })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate as extendr_api;
     use crate::prelude::*;
 
     #[test]

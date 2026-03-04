@@ -21,6 +21,7 @@ pub struct Logicals {
     pub(crate) robj: Robj,
 }
 
+use SEXPTYPE::LGLSXP;
 crate::wrapper::macros::gen_vector_wrapper_impl!(
     vector_type: Logicals, // Implements for
     scalar_type: Rbool,    // Element type
@@ -44,9 +45,9 @@ impl Logicals {
 // TODO: this should be a trait.
 impl Logicals {
     pub fn set_elt(&mut self, index: usize, val: Rbool) {
-        unsafe {
-            SET_INTEGER_ELT(self.get(), index as R_xlen_t, val.inner());
-        }
+        single_threaded(|| unsafe {
+            SET_INTEGER_ELT(self.get_mut(), index as R_xlen_t, val.inner());
+        })
     }
 }
 
@@ -66,7 +67,7 @@ impl DerefMut for Logicals {
     /// Treat Logicals as if it is a mutable slice, like `Vec<Rint>`
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            let ptr = DATAPTR(self.get()) as *mut Rbool;
+            let ptr = DATAPTR(self.get_mut()) as *mut Rbool;
             std::slice::from_raw_parts_mut(ptr, self.len())
         }
     }
@@ -86,15 +87,18 @@ impl TryFrom<Vec<bool>> for Logicals {
     type Error = Error;
 
     fn try_from(value: Vec<bool>) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            robj: <Robj>::try_from(value)?,
-        })
+        Ok(Self { robj: value.into() })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate as extendr_api;
+    use crate::r;
+    use crate::scalar::Rbool;
+    use crate::Rinternals;
+    use extendr_api::test;
+    use extendr_api::Logicals;
 
     #[test]
     fn from_iterator() {

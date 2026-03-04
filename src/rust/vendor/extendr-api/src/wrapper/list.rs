@@ -25,7 +25,7 @@ impl List {
     /// }
     /// ```
     pub fn new(size: usize) -> Self {
-        let robj = Robj::alloc_vector(VECSXP, size);
+        let robj = Robj::alloc_vector(SEXPTYPE::VECSXP, size);
         Self { robj }
     }
 
@@ -45,7 +45,7 @@ impl List {
         V::Item: Into<Robj>,
     {
         Self {
-            robj: make_vector(VECSXP, values),
+            robj: make_vector(SEXPTYPE::VECSXP, values),
         }
     }
 
@@ -165,14 +165,14 @@ impl List {
 
     /// Set an element in the list.
     pub fn set_elt(&mut self, i: usize, value: Robj) -> Result<()> {
-        unsafe {
+        single_threaded(|| unsafe {
             if i >= self.robj.len() {
                 Err(Error::OutOfRange(self.robj.clone()))
             } else {
-                SET_VECTOR_ELT(self.robj.get(), i as R_xlen_t, value.get());
+                SET_VECTOR_ELT(self.robj.get_mut(), i as R_xlen_t, value.get());
                 Ok(())
             }
-        }
+        })
     }
 
     /// Convert a List into a HashMap, consuming the list.
@@ -356,12 +356,6 @@ impl From<ListIter> for Robj {
     }
 }
 
-impl<'a> FromRobj<'a> for ListIter {
-    fn from_robj(robj: &'a Robj) -> std::result::Result<Self, &'static str> {
-        robj.as_list().map(|l| l.values()).ok_or("Not a list.")
-    }
-}
-
 // TODO: use Rstr or Sym instead of String.
 pub trait KeyValue {
     fn key(&self) -> String;
@@ -384,7 +378,7 @@ impl<T: Into<Robj>> FromIterator<T> for List {
         let len = iter_collect.len();
 
         crate::single_threaded(|| unsafe {
-            let robj = Robj::alloc_vector(VECSXP, len);
+            let mut robj = Robj::alloc_vector(SEXPTYPE::VECSXP, len);
             for (i, v) in iter_collect.into_iter().enumerate() {
                 // We don't PROTECT each element here, as they will be immediately
                 // placed into a list which will protect them:
@@ -392,7 +386,7 @@ impl<T: Into<Robj>> FromIterator<T> for List {
                 // note: Currently, `Robj` automatically registers `v` by the
                 // `ownership`-module, making it protected, even though it isn't necessary to do so.
                 let item: Robj = v.into();
-                SET_VECTOR_ELT(robj.get(), i as isize, item.get());
+                SET_VECTOR_ELT(robj.get_mut(), i as isize, item.get());
             }
 
             List { robj }

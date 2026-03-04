@@ -4,17 +4,22 @@ use crate::single_threaded;
 
 mod repeat_into_robj;
 
+/// Returns an `CHARSXP` based on the provided `&str`.
+///
+/// Note that R does string interning, thus repeated application of this
+/// function on the same string, will incur little computational cost.
+///
+/// Note, that you must protect the return value somehow.
 pub(crate) fn str_to_character(s: &str) -> SEXP {
     unsafe {
         if s.is_na() {
             R_NaString
+        } else if s.is_empty() {
+            R_BlankString
         } else {
             single_threaded(|| {
-                Rf_mkCharLenCE(
-                    s.as_ptr() as *const raw::c_char,
-                    s.len() as i32,
-                    cetype_t_CE_UTF8,
-                )
+                // this function embeds a terminating \nul
+                Rf_mkCharLenCE(s.as_ptr().cast(), s.len() as i32, cetype_t::CE_UTF8)
             })
         }
     }
@@ -28,15 +33,15 @@ impl From<()> for Robj {
     }
 }
 
-/// Convert a Result to an Robj.
+/// Convert a [`Result`] to an [`Robj`].
 ///
 /// Panics if there is an error.
 ///
-/// To use the ?-operator, an extendr-function must return either extendr_api::result::Result<T> or `std::result::Result<T,E>`.
-/// Use of panic! in extendr is discouraged due to memory leakage.
+/// To use the `?`-operator, an extendr-function must return either [`extendr_api::error::Result`] or [`std::result::Result`].
+/// Use of `panic!` in extendr is discouraged due to memory leakage.
 ///
 /// Alternative behaviors enabled by feature toggles:
-/// extendr-api supports different conversions from `Result<T,E>` into `Robj`.
+/// extendr-api supports different conversions from [`Result<T,E>`] into `Robj`.
 /// Below, `x_ok` represents an R variable on R side which was returned from rust via `T::into_robj()` or similar.
 /// Likewise, `x_err` was returned to R side from rust via `E::into_robj()` or similar.
 /// extendr-api
@@ -54,6 +59,8 @@ impl From<()> for Robj {
 ///     assert_eq!(r!(my_func()), r!(1.0));
 /// }
 /// ```
+///
+/// [`extendr_api::error::Result`]: crate::error::Result
 #[cfg(not(any(feature = "result_list", feature = "result_condition")))]
 impl<T, E> From<std::result::Result<T, E>> for Robj
 where
@@ -65,38 +72,12 @@ where
     }
 }
 
-/// Convert a Result to an Robj. Return either Ok value or Err value wrapped in an
-/// error condition. This allows using ? operator in functions
-/// and returning [Result<T>] without panicking on Err. T must implement IntoRobj.
+/// Convert a [`Result`] to an [`Robj`]. Return either `Ok` value or `Err` value wrapped in an
+/// error condition. This allows using `?` operator in functions
+/// and returning [`Result<T>`] without panicking on `Err`. `T` must implement [`IntoRobj`].
 ///
-/// Returns Ok value as is. Returns Err wrapped in an R error condition. The Err is placed in
+/// Returns `Ok` value as is. Returns `Err` wrapped in an R error condition. The `Err` is placed in
 /// $value field of the condition, and its message is set to 'extendr_err'
-/// ```
-/// use extendr_api::prelude::*;
-/// fn my_func() -> Result<f64> {
-///     Ok(1.0)
-/// }
-///
-/// test! {
-///     assert_eq!(r!(my_func()), r!(1.0));
-/// }
-///
-/// //ok and err type is any IntoRobj
-/// fn my_err_f() -> std::result::Result<f64, f64> {
-///     Err(42.0) // return err float
-/// }
-///
-/// test! {
-///     assert_eq!(
-///         r!(my_err_f()),
-///         R!(
-/// "structure(list(message = 'extendr_err',
-/// value = 42.0), class = c('extendr_error', 'error', 'condition'))"
-///         ).unwrap()
-///     );
-/// }
-///
-/// ```
 #[cfg(all(feature = "result_condition", not(feature = "result_list")))]
 impl<T, E> From<std::result::Result<T, E>> for Robj
 where
@@ -104,50 +85,25 @@ where
     E: Into<Robj>,
 {
     fn from(res: std::result::Result<T, E>) -> Self {
+        use crate as extendr_api;
         match res {
             Ok(x) => x.into(),
-            Err(x) => { list!(message = "extendr_err", value = x) }
-                // can only imagine this would ever fail due to memory allocation error, but then panicking is the right choice
-                .expect("internal error: failed to create an R list")
-                .set_class(["extendr_error", "error", "condition"])
-                .expect("internal error: failed to set class"),
+            Err(x) => {
+                let mut err = list!(message = "extendr_err", value = x.into());
+                err.set_class(["extendr_error", "error", "condition"])
+                    .expect("internal error: failed to set class");
+                err.into()
+            }
         }
     }
 }
 
-/// Convert a Result to an R `List` with an `ok` and `err` elements.
-/// This allows using ? operator in functions
-/// and returning [std::result::Result<T,E> or extendr_api::result::Result<T>]
-/// without panicking on Err.
+/// Convert a `Result` to an R `List` with an `ok` and `err` elements.
+/// This allows using `?` operator in functions
+/// and returning [`std::result::Result`] or [`extendr_api::error::Result`]
+/// without panicking on `Err`.
 ///
-///
-/// ```
-/// use extendr_api::prelude::*;
-/// fn my_err_f() -> std::result::Result<f64, String> {
-///     Err("We have water in the engine room!".to_string())
-/// }
-/// fn my_ok_f() -> std::result::Result<f64, String> {
-///     Ok(123.123)
-/// }
-///
-/// test! {
-///     assert_eq!(
-///         r!(my_err_f()),
-///         R!("x=list(ok=NULL, err='We have water in the engine room!')
-///             class(x)='extendr_result'
-///             x"
-///         ).unwrap()
-///     );
-///     assert_eq!(
-///         r!(my_ok_f()),
-///         R!("x = list(ok=123.123, err=NULL)
-///             class(x)='extendr_result'
-///             x"
-///         ).unwrap()
-///     );
-/// }
-///
-/// ```
+/// [`extendr_api::error::Result`]: crate::error::Result
 #[cfg(feature = "result_list")]
 impl<T, E> From<std::result::Result<T, E>> for Robj
 where
@@ -155,21 +111,21 @@ where
     E: Into<Robj>,
 {
     fn from(res: std::result::Result<T, E>) -> Self {
-        match res {
-            Ok(x) => list!(ok = x, err = NULL),
+        use crate as extendr_api;
+        let mut result = match res {
+            Ok(x) => list!(ok = x.into(), err = NULL),
             Err(x) => {
-                let err_robj = x.into_robj();
+                let err_robj = x.into();
                 if err_robj.is_null() {
                     panic!("Internal error: result_list not allowed to return NULL as err-value")
                 }
                 list!(ok = NULL, err = err_robj)
             }
-        }
-        // can only imagine this would ever fail due to memory allocation error, but then panicking is the right choice
-        .expect("Internal error: failed to create an R list")
-        .set_class(&["extendr_result"])
-        .expect("Internal error: failed to set class")
-        .into()
+        };
+        result
+            .set_class(&["extendr_result"])
+            .expect("Internal error: failed to set class");
+        result.into()
     }
 }
 
@@ -194,6 +150,10 @@ impl From<&Robj> for Robj {
     }
 }
 
+/// This is an extension trait to provide a convenience method `into_robj()`.
+///
+/// Defer to `From<T> for Robj`-impls if you have custom types.
+///
 pub trait IntoRobj {
     fn into_robj(self) -> Robj;
 }
@@ -212,7 +172,7 @@ where
 /// to `collect_robj()`.
 pub trait ToVectorValue {
     fn sexptype() -> SEXPTYPE {
-        0
+        SEXPTYPE::NILSXP
     }
 
     fn to_real(&self) -> f64
@@ -262,7 +222,7 @@ macro_rules! impl_real_tvv {
     ($t: ty) => {
         impl ToVectorValue for $t {
             fn sexptype() -> SEXPTYPE {
-                REALSXP
+                SEXPTYPE::REALSXP
             }
 
             fn to_real(&self) -> f64 {
@@ -272,7 +232,7 @@ macro_rules! impl_real_tvv {
 
         impl ToVectorValue for &$t {
             fn sexptype() -> SEXPTYPE {
-                REALSXP
+                SEXPTYPE::REALSXP
             }
 
             fn to_real(&self) -> f64 {
@@ -282,7 +242,7 @@ macro_rules! impl_real_tvv {
 
         impl ToVectorValue for Option<$t> {
             fn sexptype() -> SEXPTYPE {
-                REALSXP
+                SEXPTYPE::REALSXP
             }
 
             fn to_real(&self) -> f64 {
@@ -310,7 +270,7 @@ macro_rules! impl_complex_tvv {
     ($t: ty) => {
         impl ToVectorValue for $t {
             fn sexptype() -> SEXPTYPE {
-                CPLXSXP
+                SEXPTYPE::CPLXSXP
             }
 
             fn to_complex(&self) -> Rcomplex {
@@ -320,7 +280,7 @@ macro_rules! impl_complex_tvv {
 
         impl ToVectorValue for &$t {
             fn sexptype() -> SEXPTYPE {
-                CPLXSXP
+                SEXPTYPE::CPLXSXP
             }
 
             fn to_complex(&self) -> Rcomplex {
@@ -338,7 +298,7 @@ macro_rules! impl_integer_tvv {
     ($t: ty) => {
         impl ToVectorValue for $t {
             fn sexptype() -> SEXPTYPE {
-                INTSXP
+                SEXPTYPE::INTSXP
             }
 
             fn to_integer(&self) -> i32 {
@@ -348,7 +308,7 @@ macro_rules! impl_integer_tvv {
 
         impl ToVectorValue for &$t {
             fn sexptype() -> SEXPTYPE {
-                INTSXP
+                SEXPTYPE::INTSXP
             }
 
             fn to_integer(&self) -> i32 {
@@ -358,7 +318,7 @@ macro_rules! impl_integer_tvv {
 
         impl ToVectorValue for Option<$t> {
             fn sexptype() -> SEXPTYPE {
-                INTSXP
+                SEXPTYPE::INTSXP
             }
 
             fn to_integer(&self) -> i32 {
@@ -379,7 +339,7 @@ impl_integer_tvv!(u16);
 
 impl ToVectorValue for u8 {
     fn sexptype() -> SEXPTYPE {
-        RAWSXP
+        SEXPTYPE::RAWSXP
     }
 
     fn to_raw(&self) -> u8 {
@@ -389,7 +349,7 @@ impl ToVectorValue for u8 {
 
 impl ToVectorValue for &u8 {
     fn sexptype() -> SEXPTYPE {
-        RAWSXP
+        SEXPTYPE::RAWSXP
     }
 
     fn to_raw(&self) -> u8 {
@@ -401,7 +361,7 @@ macro_rules! impl_str_tvv {
     ($t: ty) => {
         impl ToVectorValue for $t {
             fn sexptype() -> SEXPTYPE {
-                STRSXP
+                SEXPTYPE::STRSXP
             }
 
             fn to_sexp(&self) -> SEXP
@@ -414,7 +374,7 @@ macro_rules! impl_str_tvv {
 
         impl ToVectorValue for &$t {
             fn sexptype() -> SEXPTYPE {
-                STRSXP
+                SEXPTYPE::STRSXP
             }
 
             fn to_sexp(&self) -> SEXP
@@ -427,7 +387,7 @@ macro_rules! impl_str_tvv {
 
         impl ToVectorValue for Option<$t> {
             fn sexptype() -> SEXPTYPE {
-                STRSXP
+                SEXPTYPE::STRSXP
             }
 
             fn to_sexp(&self) -> SEXP
@@ -449,7 +409,7 @@ impl_str_tvv! {String}
 
 impl ToVectorValue for bool {
     fn sexptype() -> SEXPTYPE {
-        LGLSXP
+        SEXPTYPE::LGLSXP
     }
 
     fn to_logical(&self) -> i32
@@ -462,7 +422,7 @@ impl ToVectorValue for bool {
 
 impl ToVectorValue for &bool {
     fn sexptype() -> SEXPTYPE {
-        LGLSXP
+        SEXPTYPE::LGLSXP
     }
 
     fn to_logical(&self) -> i32
@@ -475,7 +435,7 @@ impl ToVectorValue for &bool {
 
 impl ToVectorValue for Rbool {
     fn sexptype() -> SEXPTYPE {
-        LGLSXP
+        SEXPTYPE::LGLSXP
     }
 
     fn to_logical(&self) -> i32
@@ -488,7 +448,7 @@ impl ToVectorValue for Rbool {
 
 impl ToVectorValue for &Rbool {
     fn sexptype() -> SEXPTYPE {
-        LGLSXP
+        SEXPTYPE::LGLSXP
     }
 
     fn to_logical(&self) -> i32
@@ -501,7 +461,7 @@ impl ToVectorValue for &Rbool {
 
 impl ToVectorValue for Option<bool> {
     fn sexptype() -> SEXPTYPE {
-        LGLSXP
+        SEXPTYPE::LGLSXP
     }
 
     fn to_logical(&self) -> i32 {
@@ -523,40 +483,40 @@ where
     single_threaded(|| unsafe {
         // Length of the vector is known in advance.
         let sexptype = I::Item::sexptype();
-        if sexptype != 0 {
+        if sexptype != SEXPTYPE::NILSXP {
             let res = Robj::alloc_vector(sexptype, len);
             let sexp = res.get();
             match sexptype {
-                REALSXP => {
+                SEXPTYPE::REALSXP => {
                     let ptr = REAL(sexp);
                     for (i, v) in iter.enumerate() {
                         *ptr.add(i) = v.to_real();
                     }
                 }
-                CPLXSXP => {
+                SEXPTYPE::CPLXSXP => {
                     let ptr = COMPLEX(sexp);
                     for (i, v) in iter.enumerate() {
                         *ptr.add(i) = v.to_complex();
                     }
                 }
-                INTSXP => {
+                SEXPTYPE::INTSXP => {
                     let ptr = INTEGER(sexp);
                     for (i, v) in iter.enumerate() {
                         *ptr.add(i) = v.to_integer();
                     }
                 }
-                LGLSXP => {
+                SEXPTYPE::LGLSXP => {
                     let ptr = LOGICAL(sexp);
                     for (i, v) in iter.enumerate() {
                         *ptr.add(i) = v.to_logical();
                     }
                 }
-                STRSXP => {
+                SEXPTYPE::STRSXP => {
                     for (i, v) in iter.enumerate() {
                         SET_STRING_ELT(sexp, i as isize, v.to_sexp());
                     }
                 }
-                RAWSXP => {
+                SEXPTYPE::RAWSXP => {
                     let ptr = RAW(sexp);
                     for (i, v) in iter.enumerate() {
                         *ptr.add(i) = v.to_raw();
@@ -620,7 +580,7 @@ pub trait RobjItertools: Iterator {
     /// # Arguments
     ///
     /// * `dims` - an array containing the length of each dimension
-    fn collect_rarray<'a, const LEN: usize>(
+    fn collect_rarray<const LEN: usize>(
         self,
         dims: [usize; LEN],
     ) -> Result<RArray<Self::Item, [usize; LEN]>>
@@ -628,10 +588,9 @@ pub trait RobjItertools: Iterator {
         Self: Iterator,
         Self: Sized,
         Self::Item: ToVectorValue,
-        Robj: AsTypedSlice<'a, Self::Item>,
-        Self::Item: 'a,
+        Robj: for<'a> AsTypedSlice<'a, Self::Item>,
     {
-        let vector = self.collect_robj();
+        let mut vector = self.collect_robj();
         let prod = dims.iter().product::<usize>();
         if prod != vector.len() {
             return Err(Error::Other(format!(
@@ -640,15 +599,11 @@ pub trait RobjItertools: Iterator {
                 prod
             )));
         }
-        let mut robj =
-            vector.set_attrib(wrapper::symbol::dim_symbol(), dims.iter().collect_robj())?;
-        let data = robj
-            .as_typed_slice_mut()
-            .ok_or(Error::Other(
-                "Unknown error in converting to slice".to_string(),
-            ))?
-            .as_mut_ptr();
-        Ok(RArray::from_parts(robj, data, dims))
+        vector.set_attrib(wrapper::symbol::dim_symbol(), dims.iter().collect_robj())?;
+        let _data = vector.as_typed_slice().ok_or(Error::Other(
+            "Unknown error in converting to slice".to_string(),
+        ))?;
+        Ok(RArray::from_parts(vector, dims))
     }
 }
 
@@ -707,7 +662,7 @@ where
     &'a T: ToVectorValue + 'a,
 {
     fn from(val: &'a [T; N]) -> Self {
-        fixed_size_collect(val.into_iter(), N)
+        fixed_size_collect(val.iter(), N)
     }
 }
 
@@ -717,7 +672,7 @@ where
     &'a mut T: ToVectorValue + 'a,
 {
     fn from(val: &'a mut [T; N]) -> Self {
-        fixed_size_collect(val.into_iter(), N)
+        fixed_size_collect(val.iter_mut(), N)
     }
 }
 
@@ -742,7 +697,7 @@ where
     &'a T: ToVectorValue,
 {
     fn from(val: &'a [T]) -> Self {
-        val.into_iter().collect_robj()
+        val.iter().collect_robj()
     }
 }
 
@@ -759,13 +714,14 @@ impl From<Vec<Robj>> for Robj {
 impl From<Vec<Rstr>> for Robj {
     /// Convert a vector of Rstr into strings.
     fn from(val: Vec<Rstr>) -> Self {
-        Strings::from_values(val.into_iter()).into()
+        Strings::from_values(val).into()
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate as extendr_api;
 
     #[test]
     fn test_vec_rint_to_robj() {
@@ -823,6 +779,55 @@ mod test {
             let msg = rmat.unwrap_err().to_string();
             assert!(msg.contains("27"));
             assert!(msg.contains("dimension"));
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "result_condition", not(feature = "result_list")))]
+    fn test_result_condition() {
+        use crate::prelude::*;
+        fn my_err_f() -> std::result::Result<f64, f64> {
+            Err(42.0) // return err float
+        }
+
+        test! {
+                  assert_eq!(
+                    r!(my_err_f()),
+                    R!(
+        "structure(list(message = 'extendr_err',
+        value = 42.0), class = c('extendr_error', 'error', 'condition'))"
+                    ).unwrap()
+                );
+            }
+    }
+
+    #[test]
+    #[cfg(feature = "result_list")]
+    fn test_result_list() {
+        use crate::prelude::*;
+        fn my_err_f() -> std::result::Result<f64, String> {
+            Err("We have water in the engine room!".to_string())
+        }
+
+        fn my_ok_f() -> std::result::Result<f64, String> {
+            Ok(123.123)
+        }
+
+        test! {
+            assert_eq!(
+                r!(my_err_f()),
+                R!("x=list(ok=NULL, err='We have water in the engine room!')
+                    class(x)='extendr_result'
+                    x"
+                ).unwrap()
+            );
+            assert_eq!(
+                r!(my_ok_f()),
+                R!("x = list(ok=123.123, err=NULL)
+                    class(x)='extendr_result'
+                    x"
+                ).unwrap()
+            );
         }
     }
 }

@@ -22,7 +22,7 @@ where
     Ok(t)
 }
 
-// Allow errors to popagate to extendr errors.
+// Allow errors to propagate to extendr errors.
 impl serde::de::Error for Error {
     fn custom<T>(msg: T) -> Self
     where
@@ -802,8 +802,9 @@ impl<'de> Visitor<'de> for RobjVisitor {
             keys.push(key);
             values.push(value);
         }
-
-        Ok(List::from_values(values).set_names(keys).unwrap())
+        let mut result = List::from_values(values);
+        result.set_names(keys).unwrap();
+        Ok(result.into())
     }
 
     fn visit_unit<E>(self) -> std::result::Result<Self::Value, E>

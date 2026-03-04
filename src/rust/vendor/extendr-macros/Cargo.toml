@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "extendr-macros"
-version = "0.6.0"
+version = "0.7.1"
 authors = [
     "andy-thomason <andy@andythomason.com>",
     "Thomas Down",
@@ -20,20 +20,32 @@ authors = [
     "Claus O. Wilke <wilke@austin.utexas.edu>",
     "Hiroaki Yutani",
     "Ilia A. Kosenkov <ilia.kosenkov@outlook.com>",
+    "Michael Milton <michael.r.milton@gmail.com>",
 ]
+build = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
 description = "Generate bindings from R to Rust."
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/extendr/extendr"
 
 [lib]
-proc_macro = true
+name = "extendr_macros"
+path = "src/lib.rs"
+proc-macro = true
+
+[[test]]
+name = "trybuild"
+path = "tests/trybuild.rs"
 
 [dependencies.proc-macro2]
 version = "1.0"
 
 [dependencies.quote]
-version = "1.0.6"
+version = "1.0"
 
 [dependencies.syn]
 version = "2.0"
@@ -43,4 +55,7 @@ features = [
 ]
 
 [dev-dependencies.libR-sys]
-version = "0.6.0"
+version = "0.7.1"
+
+[dev-dependencies.trybuild]
+version = "1.0"

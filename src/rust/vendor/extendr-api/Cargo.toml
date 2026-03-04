@@ -11,9 +11,9 @@
 
 [package]
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.65"
 name = "extendr-api"
-version = "0.6.0"
+version = "0.7.1"
 authors = [
     "andy-thomason <andy@andythomason.com>",
     "Thomas Down",
@@ -23,26 +23,137 @@ authors = [
     "Ilia A. Kosenkov <ilia.kosenkov@outlook.com>",
     "Michael Milton <michael.r.milton@gmail.com>",
 ]
+build = "build.rs"
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
 description = "Safe and user friendly bindings to the R programming language."
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/extendr/extendr"
 
 [package.metadata.docs.rs]
-features = [
-    "full-functionality",
-    "libR-sys/use-bindgen",
-]
+features = ["full-functionality"]
+
+[lib]
+name = "extendr_api"
+path = "src/lib.rs"
+
+[[test]]
+name = "altrep_tests"
+path = "tests/altrep_tests.rs"
+
+[[test]]
+name = "call_tests"
+path = "tests/call_tests.rs"
+
+[[test]]
+name = "dataframe_tests"
+path = "tests/dataframe_tests.rs"
+
+[[test]]
+name = "debug_tests"
+path = "tests/debug_tests.rs"
+
+[[test]]
+name = "derive_into_list"
+path = "tests/derive_into_list.rs"
+
+[[test]]
+name = "deserializer_tests"
+path = "tests/deserializer_tests.rs"
+
+[[test]]
+name = "extendr_macro"
+path = "tests/extendr_macro.rs"
+
+[[test]]
+name = "extendr_module_tests"
+path = "tests/extendr_module_tests.rs"
+
+[[test]]
+name = "externalptr_tests"
+path = "tests/externalptr_tests.rs"
+
+[[test]]
+name = "features"
+path = "tests/features.rs"
+
+[[test]]
+name = "from_iterator_tests"
+path = "tests/from_iterator_tests.rs"
+
+[[test]]
+name = "graphics_tests"
+path = "tests/graphics_tests.rs"
+
+[[test]]
+name = "into_iterator_tests"
+path = "tests/into_iterator_tests.rs"
+
+[[test]]
+name = "io_tests"
+path = "tests/io_tests.rs"
+
+[[test]]
+name = "issue-397-memory-allocation"
+path = "tests/issue-397-memory-allocation.rs"
+
+[[test]]
+name = "macro_tests"
+path = "tests/macro_tests.rs"
+
+[[test]]
+name = "na_tests"
+path = "tests/na_tests.rs"
+
+[[test]]
+name = "ndarray_try_from_tests"
+path = "tests/ndarray_try_from_tests.rs"
+
+[[test]]
+name = "non_api_tests"
+path = "tests/non_api_tests.rs"
+required-features = ["non-api"]
+
+[[test]]
+name = "rng_tests"
+path = "tests/rng_tests.rs"
+
+[[test]]
+name = "scalar_ordering_tests"
+path = "tests/scalar_ordering_tests.rs"
+
+[[test]]
+name = "scalar_tests"
+path = "tests/scalar_tests.rs"
+
+[[test]]
+name = "serializer_tests"
+path = "tests/serializer_tests.rs"
+
+[[test]]
+name = "try_from_tests"
+path = "tests/try_from_tests.rs"
+
+[[test]]
+name = "vector_tests"
+path = "tests/vector_tests.rs"
 
 [dependencies.either]
 version = "1.8.1"
 optional = true
 
 [dependencies.extendr-macros]
-version = "0.6.0"
+version = "0.7.1"
+
+[dependencies.faer]
+version = "0.19"
+optional = true
 
 [dependencies.libR-sys]
-version = "0.6.0"
+version = "0.7.1"
 
 [dependencies.libc]
 version = "0.2"
@@ -67,26 +178,26 @@ version = "1.0"
 features = ["derive"]
 optional = true
 
-[dev-dependencies.extendr-engine]
-version = "0.6.0"
-
 [dev-dependencies.rstest]
-version = "0.18.1"
+version = "0.22.0"
 
 [features]
 full-functionality = [
     "graphics",
     "either",
     "ndarray",
+    "faer",
     "num-complex",
     "serde",
 ]
 graphics = ["libc"]
+non-api = []
 result_condition = []
 result_list = []
 tests = [
     "tests-minimal",
     "ndarray",
+    "faer",
     "serde",
     "num-complex",
     "either",
@@ -99,4 +210,4 @@ tests-graphics = [
     "tests-minimal",
     "graphics",
 ]
-tests-minimal = ["libR-sys/use-bindgen"]
+tests-minimal = []

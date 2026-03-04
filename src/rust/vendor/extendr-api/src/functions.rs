@@ -1,6 +1,7 @@
 use crate as extendr_api;
 use crate::*;
 
+#[cfg(feature = "non-api")]
 /// Get a global variable from global_env() and ancestors.
 /// If the result is a promise, evaulate the promise.
 ///
@@ -17,6 +18,7 @@ pub fn global_var<K: Into<Robj>>(key: K) -> Result<Robj> {
     global_env().find_var(key)?.eval_promise()
 }
 
+#[cfg(feature = "non-api")]
 /// Get a local variable from current_env() and ancestors.
 ///
 /// If the result is a promise, evaulate the promise.
@@ -56,7 +58,7 @@ pub fn global_function<K: Into<Robj>>(key: K) -> Result<Robj> {
 
 /// Find a namespace by name.
 ///
-/// See also [Robj::double_colon].
+/// See also [`Robj::double_colon`].
 /// ```
 /// use extendr_api::prelude::*;
 /// test! {
@@ -64,6 +66,7 @@ pub fn global_function<K: Into<Robj>>(key: K) -> Result<Robj> {
 ///    assert_eq!(find_namespace("stats").is_ok(), true);
 /// }
 /// ```
+/// [`Robj::double_colon`]: Operators::double_colon
 pub fn find_namespace<K: Into<Robj>>(key: K) -> Result<Environment> {
     let key = key.into();
     let res = single_threaded(|| call!(".getNamespace", key.clone()));
@@ -116,10 +119,10 @@ pub fn empty_env() -> Environment {
 /// ```
 #[cfg(use_r_newenv)]
 pub fn new_env(parent: Environment, hash: bool, capacity: i32) -> Environment {
-    unsafe {
+    single_threaded(|| unsafe {
         let env = R_NewEnv(parent.robj.get(), hash as i32, capacity);
         Robj::from_sexp(env).try_into().unwrap()
-    }
+    })
 }
 
 // R_NewEnv is available as of R 4.1.0. For the older version, we call an R function `new.env()`.
@@ -131,15 +134,7 @@ pub fn new_env(parent: Environment, hash: bool, capacity: i32) -> Environment {
         .unwrap()
 }
 
-/// The base environment; formerly R_NilValue
-///
-/// ```
-/// use extendr_api::prelude::*;
-/// test! {
-///     global_env().set_local(sym!(x), "hello");
-///     assert_eq!(base_env().local(sym!(+)), Ok(r!(Primitive::from_string("+"))));
-/// }
-/// ```
+/// The base environment; formerly `R_NilValue`
 pub fn base_env() -> Environment {
     unsafe { Robj::from_sexp(R_BaseEnv).try_into().unwrap() }
 }
@@ -178,10 +173,10 @@ pub fn nil_value() -> Robj {
     unsafe { Robj::from_sexp(R_NilValue) }
 }
 
-/* fix version issues.
 /// ".Generic"
-pub fn dot_Generic() -> Robj { unsafe { Robj::from_sexp(R_dot_Generic) }}
-*/
+pub fn dot_generic() -> Robj {
+    unsafe { Robj::from_sexp(R_dot_Generic) }
+}
 
 /// NA_STRING as a CHARSXP
 pub fn na_string() -> Robj {
@@ -209,12 +204,12 @@ pub fn blank_scalar_string() -> Robj {
 pub fn parse(code: &str) -> Result<Expressions> {
     single_threaded(|| unsafe {
         use libR_sys::*;
-        let mut status = 0_u32;
-        let status_ptr = &mut status as _;
+        let mut status = ParseStatus::PARSE_NULL;
+        let status_ptr = &mut status as *mut _;
         let codeobj: Robj = code.into();
         let parsed = Robj::from_sexp(R_ParseVector(codeobj.get(), -1, status_ptr, R_NilValue));
         match status {
-            1 => parsed.try_into(),
+            ParseStatus::PARSE_OK => parsed.try_into(),
             _ => Err(Error::ParseError(code.into())),
         }
     })

@@ -17,6 +17,7 @@ pub struct Complexes {
     pub(crate) robj: Robj,
 }
 
+use libR_sys::SEXPTYPE::CPLXSXP;
 crate::wrapper::macros::gen_vector_wrapper_impl!(
     vector_type: Complexes,
     scalar_type: Rcplx,
@@ -63,7 +64,7 @@ impl DerefMut for Complexes {
     /// Treat Complexes as if it is a mutable slice, like `Vec<Rcplx>`
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            let ptr = DATAPTR(self.get()) as *mut Rcplx;
+            let ptr = DATAPTR(self.get_mut()) as *mut Rcplx;
             std::slice::from_raw_parts_mut(ptr, self.len())
         }
     }
@@ -83,15 +84,14 @@ impl TryFrom<Vec<c64>> for Complexes {
     type Error = Error;
 
     fn try_from(value: Vec<c64>) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            robj: <Robj>::try_from(value)?,
-        })
+        Ok(Self { robj: value.into() })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as extendr_api;
 
     #[test]
     fn test_try_from_vec_c64_conversion() {

@@ -66,6 +66,56 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+#[non_exhaustive]
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SEXPREC(std::ffi::c_void);
+
+extern "C" {
+    // Return type should match `SEXPTYPE`
+    pub fn TYPEOF(x: SEXP) -> SEXPTYPE;
+}
+
+#[allow(non_camel_case_types)]
+pub type R_altrep_Coerce_method_t =
+    ::std::option::Option<unsafe extern "C" fn(arg1: SEXP, arg2: SEXPTYPE) -> SEXP>;
+
+pub unsafe fn Rf_isS4(arg1: SEXP) -> Rboolean {
+    unsafe {
+        if secret::Rf_isS4_original(arg1) == 0 {
+            Rboolean::FALSE
+        } else {
+            Rboolean::TRUE
+        }
+    }
+}
+
+mod secret {
+    use super::*;
+    extern "C" {
+        #[link_name = "Rf_isS4"]
+        pub fn Rf_isS4_original(arg1: SEXP) -> u32;
+    }
+}
+
+impl From<Rboolean> for bool {
+    fn from(value: Rboolean) -> Self {
+        match value {
+            Rboolean::FALSE => false,
+            Rboolean::TRUE => true,
+        }
+    }
+}
+
+impl From<bool> for Rboolean {
+    fn from(value: bool) -> Self {
+        match value {
+            true => Rboolean::TRUE,
+            false => Rboolean::FALSE,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,19 +187,31 @@ mod tests {
     fn test_eval() {
         start_R();
         unsafe {
-            // In an ideal world, we would do the following.
-            //   let res = R_ParseEvalString(cstr!("1"), R_NilValue);
-            // But R_ParseEvalString is only in recent packages.
-
-            let s = Rf_protect(Rf_mkString(cstr!("1")));
-            let mut status: ParseStatus = 0;
-            let status_ptr = &mut status as *mut ParseStatus;
-            let ps = Rf_protect(R_ParseVector(s, -1, status_ptr, R_NilValue));
-            let val = Rf_eval(VECTOR_ELT(ps, 0), R_GlobalEnv);
+            let val = Rf_protect(R_ParseEvalString(cstr!("1"), R_NilValue));
             Rf_PrintValue(val);
-            assert_eq!(TYPEOF(val) as u32, REALSXP);
+            assert_eq!(TYPEOF(val), SEXPTYPE::REALSXP);
             assert_eq!(*REAL(val), 1.);
-            Rf_unprotect(2);
+            Rf_unprotect(1);
+        }
+        // There is one pathological example of `Rf_is*` where `TRUE` is not 1,
+        // but 16. We show here that the casting is done as intended
+        unsafe {
+            let sexp = R_ParseEvalString(cstr!(r#"new("factor")"#), R_GlobalEnv);
+            Rf_protect(sexp);
+            Rf_PrintValue(sexp);
+
+            assert_eq!(
+                std::mem::discriminant(&Rf_isS4(sexp)),
+                std::mem::discriminant(&Rboolean::TRUE),
+            );
+            assert!(<Rboolean as Into<bool>>::into(Rf_isS4(sexp)));
+            assert!(
+                (Rboolean::FALSE == Rf_isS4(sexp)) || (Rboolean::TRUE == Rf_isS4(sexp)),
+                "PartialEq implementation is broken"
+            );
+            assert!(Rboolean::TRUE == Rf_isS4(sexp));
+            assert_eq!(Rf_isS4(sexp), Rboolean::TRUE);
+            Rf_unprotect(1);
         }
     }
 }

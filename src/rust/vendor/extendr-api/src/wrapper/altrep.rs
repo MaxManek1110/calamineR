@@ -49,8 +49,9 @@ pub struct Altrep {
 /// Implement one or more of these methods to generate an Altrep class.
 /// This is likely to be unstable for a while.
 pub trait AltrepImpl: Clone + std::fmt::Debug {
+    #[cfg(feature = "non-api")]
     /// Constructor that is called when loading an Altrep object from a file.
-    fn unserialize_ex(
+    unsafe fn unserialize_ex(
         class: Robj,
         state: Robj,
         attributes: Robj,
@@ -59,12 +60,12 @@ pub trait AltrepImpl: Clone + std::fmt::Debug {
     ) -> Robj {
         let res = Self::unserialize(class, state);
         if !res.is_null() {
-            unsafe {
+            single_threaded(|| unsafe {
                 let val = res.get();
                 SET_ATTRIB(val, attributes.get());
                 SET_OBJECT(val, obj_flags);
                 SETLEVELS(val, levels);
-            }
+            })
         }
         res
     }
@@ -116,7 +117,7 @@ pub trait AltrepImpl: Clone + std::fmt::Debug {
     /// Get the data pointer for this vector, possibly expanding the
     /// compact representation into a full R vector.
     fn dataptr(x: SEXP, _writeable: bool) -> *mut u8 {
-        unsafe {
+        single_threaded(|| unsafe {
             let data2 = R_altrep_data2(x);
             if data2 == R_NilValue || TYPEOF(data2) != TYPEOF(x) {
                 let data2 = manifest(x);
@@ -125,7 +126,7 @@ pub trait AltrepImpl: Clone + std::fmt::Debug {
             } else {
                 DATAPTR(data2) as *mut u8
             }
-        }
+        })
     }
 
     /// Get the data pointer for this vector, returning NULL
@@ -152,32 +153,35 @@ pub trait AltrepImpl: Clone + std::fmt::Debug {
 // Manifest a vector by storing the "elt" values to memory.
 // Return the new vector.
 fn manifest(x: SEXP) -> SEXP {
-    unsafe {
+    single_threaded(|| unsafe {
         Rf_protect(x);
-        let len = XLENGTH_EX(x);
-        let data2 = Rf_allocVector(TYPEOF(x) as u32, len as R_xlen_t);
+        let len = XLENGTH(x);
+        let data2 = Rf_allocVector(TYPEOF(x), len as R_xlen_t);
         Rf_protect(data2);
-        match TYPEOF(x) as u32 {
-            INTSXP => {
+        match TYPEOF(x) {
+            SEXPTYPE::INTSXP => {
                 INTEGER_GET_REGION(x, 0, len as R_xlen_t, INTEGER(data2));
             }
-            LGLSXP => {
+            SEXPTYPE::LGLSXP => {
                 LOGICAL_GET_REGION(x, 0, len as R_xlen_t, LOGICAL(data2));
             }
-            REALSXP => {
+            SEXPTYPE::REALSXP => {
                 REAL_GET_REGION(x, 0, len as R_xlen_t, REAL(data2));
             }
-            RAWSXP => {
+            SEXPTYPE::RAWSXP => {
                 RAW_GET_REGION(x, 0, len as R_xlen_t, RAW(data2));
             }
-            CPLXSXP => {
+            SEXPTYPE::CPLXSXP => {
                 COMPLEX_GET_REGION(x, 0, len as R_xlen_t, COMPLEX(data2));
             }
-            _ => panic!("unsupported ALTREP type."),
+            _ => {
+                Rf_unprotect(2);
+                panic!("unsupported ALTREP type.")
+            }
         };
         Rf_unprotect(2);
         data2
-    }
+    })
 }
 
 pub trait AltIntegerImpl: AltrepImpl {
@@ -488,7 +492,7 @@ impl Altrep {
 
     /// Safely implement ALTREP_CLASS.
     pub fn class(&self) -> Robj {
-        unsafe { Robj::from_sexp(ALTREP_CLASS(self.robj.get())) }
+        single_threaded(|| unsafe { Robj::from_sexp(ALTREP_CLASS(self.robj.get())) })
     }
 
     pub fn from_state_and_class<StateType: 'static>(
@@ -512,7 +516,7 @@ impl Altrep {
 
             // Use R_RegisterCFinalizerEx() and set onexit to 1 (TRUE) to invoke
             // the finalizer on a shutdown of the R session as well.
-            R_RegisterCFinalizerEx(state, Some(finalizer::<StateType>), 1);
+            R_RegisterCFinalizerEx(state, Some(finalizer::<StateType>), Rboolean::TRUE);
 
             let class_ptr = R_altrep_class_t { ptr: class.get() };
             let sexp = R_new_altrep(class_ptr, state, R_NilValue);
@@ -554,6 +558,7 @@ impl Altrep {
         use std::os::raw::c_int;
         use std::os::raw::c_void;
 
+        #[cfg(feature = "non-api")]
         unsafe extern "C" fn altrep_UnserializeEX<StateType: AltrepImpl>(
             class: SEXP,
             state: SEXP,
@@ -586,7 +591,7 @@ impl Altrep {
 
         unsafe extern "C" fn altrep_Coerce<StateType: AltrepImpl + 'static>(
             x: SEXP,
-            ty: c_int,
+            ty: SEXPTYPE,
         ) -> SEXP {
             <StateType>::coerce(x, sxp_to_rtype(ty)).get()
         }
@@ -595,14 +600,14 @@ impl Altrep {
             x: SEXP,
             deep: Rboolean,
         ) -> SEXP {
-            <StateType>::duplicate(x, deep == 1).get()
+            <StateType>::duplicate(x, deep == Rboolean::TRUE).get()
         }
 
         unsafe extern "C" fn altrep_DuplicateEX<StateType: AltrepImpl + 'static>(
             x: SEXP,
             deep: Rboolean,
         ) -> SEXP {
-            <StateType>::duplicate_ex(x, deep == 1).get()
+            <StateType>::duplicate_ex(x, deep == Rboolean::TRUE).get()
         }
 
         unsafe extern "C" fn altrep_Inspect<StateType: AltrepImpl + 'static>(
@@ -625,7 +630,7 @@ impl Altrep {
             x: SEXP,
             writeable: Rboolean,
         ) -> *mut c_void {
-            <StateType>::dataptr(x, writeable != 0) as *mut c_void
+            <StateType>::dataptr(x, writeable != Rboolean::FALSE) as *mut c_void
         }
 
         unsafe extern "C" fn altvec_Dataptr_or_null<StateType: AltrepImpl + 'static>(
@@ -677,6 +682,7 @@ impl Altrep {
                 _ => panic!("expected Altvec compatible type"),
             };
 
+            #[cfg(feature = "non-api")]
             R_set_altrep_UnserializeEX_method(class_ptr, Some(altrep_UnserializeEX::<StateType>));
             R_set_altrep_Unserialize_method(class_ptr, Some(altrep_Unserialize::<StateType>));
             R_set_altrep_Serialized_state_method(
@@ -745,21 +751,27 @@ impl Altrep {
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).sum(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .sum(narm == Rboolean::TRUE)
+                    .get()
             }
 
             unsafe extern "C" fn altinteger_Min<StateType: AltIntegerImpl + 'static>(
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).min(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .min(narm == Rboolean::TRUE)
+                    .get()
             }
 
             unsafe extern "C" fn altinteger_Max<StateType: AltIntegerImpl + 'static>(
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).max(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .max(narm == Rboolean::TRUE)
+                    .get()
             }
 
             R_set_altinteger_Elt_method(class_ptr, Some(altinteger_Elt::<StateType>));
@@ -817,21 +829,27 @@ impl Altrep {
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).sum(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .sum(narm == Rboolean::TRUE)
+                    .get()
             }
 
             unsafe extern "C" fn altreal_Min<StateType: AltRealImpl + 'static>(
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).min(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .min(narm == Rboolean::TRUE)
+                    .get()
             }
 
             unsafe extern "C" fn altreal_Max<StateType: AltRealImpl + 'static>(
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).max(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .max(narm == Rboolean::TRUE)
+                    .get()
             }
 
             R_set_altreal_Elt_method(class_ptr, Some(altreal_Elt::<StateType>));
@@ -890,7 +908,9 @@ impl Altrep {
                 x: SEXP,
                 narm: Rboolean,
             ) -> SEXP {
-                Altrep::get_state::<StateType>(x).sum(narm == 1).get()
+                Altrep::get_state::<StateType>(x)
+                    .sum(narm == Rboolean::TRUE)
+                    .get()
             }
 
             R_set_altlogical_Elt_method(class_ptr, Some(altlogical_Elt::<StateType>));
@@ -1045,8 +1065,7 @@ impl Altrep {
                 i: R_xlen_t,
                 v: SEXP,
             ) {
-                Altrep::get_state_mut::<StateType>(x)
-                    .set_elt(i as usize, Robj::from_sexp(v).try_into().unwrap())
+                Altrep::get_state_mut::<StateType>(x).set_elt(i as usize, Robj::from_sexp(v))
             }
 
             R_set_altlist_Elt_method(class_ptr, Some(altlist_Elt::<StateType>));

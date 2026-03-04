@@ -29,6 +29,7 @@ pub struct Function {
 }
 
 impl Function {
+    #[cfg(feature = "non-api")]
     /// Make a function from parts.
     /// ```
     /// use extendr_api::prelude::*;
@@ -41,14 +42,14 @@ impl Function {
     /// }
     /// ```
     pub fn from_parts(formals: Pairlist, body: Language, env: Environment) -> Result<Self> {
-        unsafe {
-            let sexp = Rf_allocSExp(CLOSXP);
+        single_threaded(|| unsafe {
+            let sexp = Rf_allocSExp(SEXPTYPE::CLOSXP);
             let robj = Robj::from_sexp(sexp);
             SET_FORMALS(sexp, formals.get());
             SET_BODY(sexp, body.get());
             SET_CLOENV(sexp, env.get());
             Ok(Function { robj })
-        }
+        })
     }
 
     /// Do the equivalent of x(a, b, c)
@@ -60,10 +61,10 @@ impl Function {
     /// }
     /// ```
     pub fn call(&self, args: Pairlist) -> Result<Robj> {
-        unsafe {
+        single_threaded(|| unsafe {
             let call = Robj::from_sexp(Rf_lcons(self.get(), args.get()));
             call.eval()
-        }
+        })
     }
 
     /// Get the formal arguments of the function or None if it is a primitive.

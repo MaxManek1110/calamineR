@@ -9,7 +9,7 @@ crate-type = ["staticlib"]
 name = "calamine_r"
 
 [dependencies]
-extendr-api = "0.6"
+extendr-api = "0.7"
 calamine = "0.24"
 zip = { version = "0.6", features = ["deflate"], default-features = false }
 

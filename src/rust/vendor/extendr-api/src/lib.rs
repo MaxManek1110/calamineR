@@ -1,8 +1,4 @@
-//!
-//! A safe and user friendly R extension interface.
-//!
-//! * Build rust extensions to R.
-//! * Convert R packages to Rust crates.
+//! An ergonomic, opinionated, safe and user-friendly wrapper to the R-API
 //!
 //! This library aims to provide an interface that will be familiar to
 //! first-time users of Rust or indeed any compiled language.
@@ -175,24 +171,6 @@
 //! }
 //! ```
 //!
-//! You can call R functions and primitives using the [call!] macro.
-//! ```
-//! use extendr_api::prelude::*;
-//! test! {
-//!
-//!     // As one R! macro call
-//!     let confint1 = R!("confint(lm(weight ~ group - 1, PlantGrowth))")?;
-//!    
-//!     // As many parameterized calls.
-//!     let formula = lang!("~", sym!(weight), lang!("-", sym!(group), 1.0)).set_class(["formula"])?;
-//!     let plant_growth = global!(PlantGrowth)?;
-//!     let model = call!("lm", formula, plant_growth)?;
-//!     let confint2 = call!("confint", model)?;
-//!    
-//!     assert_eq!(confint1.as_real_vector(), confint2.as_real_vector());
-//! }
-//! ```
-//!
 //! Rust has a concept of "Owned" and "Borrowed" objects.
 //!
 //! Owned objects, such as [Vec] and [String] allocate memory
@@ -253,27 +231,16 @@
 //! }
 //! ```
 //!
-//! ## Returning Result<T,E> to R
+//! ## Returning `Result<T, E>` to R
 //!
-//! Currently, `throw_r_error()` leaks memory because it jumps to R without properly dropping
-//! some rust objects.
-//!
-//! The memory-safe way to do error handling with extendr is to return a Result<T, E>
-//! to R. By default, any Err will trigger a panic! on the rust side which unwinds the stack.
-//! The rust error trace will be printed to stderr, not R terminal. Any Ok value is returned
-//! as is.
-//!
-//! Alternatively, two experimental non-leaking features, `result_list` and `result_condition`,
+//! Two experimental features for returning error-aware R `list`s, `result_list` and `result_condition`,
 //! can be toggled to avoid panics on `Err`. Instead, an `Err` `x` is returned as either
 //!  - list: `list(ok=NULL, err=x)` when `result_list` is enabled,
 //!  - error condition: `<error: extendr_error>`, with `x` placed in `condition$value`, when `resultd_condition` is enabled.
 //!
 //! It is currently solely up to the user to handle any result on R side.
 //!
-//! The minimal overhead of calling an extendr function is in the ballpark of 2-4us.
-//! Returning a condition or list increases the overhead to 4-8us. Checking & handling the result
-//! on R side will likely increase overall overhead to 8-16us, depending on how efficiently the
-//! result is handled.
+//! There is an added overhead of wrapping Rust results in an R `list` object.
 //!
 //! ```ignore
 //! use extendr_api::prelude::*;
@@ -316,26 +283,27 @@
 //!   if (inherits(val_or_err, "extendr_error")) stop(val_or_err)
 //!   val_or_err
 //! }
-//!
 //! ```
 //!
 //! ## Feature gates
 //!
 //! extendr-api has some optional features behind these feature gates:
 //!
-//! - `ndarray`: provides the conversion between R's matrices and [ndarray](https://docs.rs/ndarray/latest/ndarray/).
-//! - `num-complex`: provides the conversion between R's complex numbers and [num-complex](https://docs.rs/num-complex/latest/num_complex/).
-//! - `serde`: provides the [Serde](https://serde.rs/) support.
+//! - `ndarray`: provides the conversion between R's matrices and [`ndarray`](https://docs.rs/ndarray/latest/ndarray/).
+//! - `num-complex`: provides the conversion between R's complex numbers and [`num-complex`](https://docs.rs/num-complex/latest/num_complex/).
+//! - `serde`: provides the [`serde`](https://serde.rs/) support.
 //! - `graphics`: provides the functionality to control or implement graphics devices.
+//! - `either`: provides implementation of type conversion traits for `Either<L, R>` from [`either`](https://docs.rs/either/latest/either/) if `L` and `R` both implement those traits.
+//! - `faer`: provides conversion between R's matrices and [`faer`](https://docs.rs/faer/latest/faer/).
 //!
-//! extendr-api supports three ways of returning a Result<T,E> to R. Only one behavior feature can be enabled at a time.
+//! extendr-api supports three ways of returning a Result<T,E> to R.
+//! Only one behavior feature can be enabled at a time.
 //! - `result_panic`: Default behavior, return `Ok` as is, panic! on any `Err`
 //!
 //! Default behavior can be overridden by specifying `extend_api` features, i.e. `extendr-api = {..., default-features = false, features= ["result_condition"]}`
 //! These features are experimental and are subject to change.
 //! - `result_list`: return `Ok` as `list(ok=?, err=NULL)` or `Err` `list(ok=NULL, err=?)`
 //! - `result_condition`: return `Ok` as is or `Err` as $value in an R error condition.
-
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/extendr/extendr/master/extendr-logo-256.png"
 )]
@@ -368,6 +336,8 @@ pub mod na;
 
 pub mod optional;
 
+pub(crate) mod conversions;
+
 pub use std::convert::{TryFrom, TryInto};
 pub use std::ops::Deref;
 pub use std::ops::DerefMut;
@@ -385,11 +355,8 @@ pub use error::*;
 pub use functions::*;
 pub use lang_macros::*;
 pub use na::*;
-pub use rmacros::*;
 pub use robj::*;
-pub use thread_safety::{
-    catch_r_error, handle_panic, single_threaded, this_thread_id, throw_r_error,
-};
+pub use thread_safety::{catch_r_error, handle_panic, single_threaded, throw_r_error};
 pub use wrapper::*;
 
 pub use extendr_macros::*;
@@ -422,8 +389,21 @@ pub const NA_LOGICAL: Rbool = Rbool::na_value();
 #[doc(hidden)]
 pub use std::collections::HashMap;
 
+/// This is needed for the generation of wrappers.
 #[doc(hidden)]
 pub use libR_sys::DllInfo;
+
+/// This is necessary for `#[extendr]`-impl
+#[doc(hidden)]
+pub use libR_sys::R_ExternalPtrAddr;
+
+/// This is used in `#[extendr(use_rng = true)]` on `fn`-items.
+#[doc(hidden)]
+pub use libR_sys::GetRNGstate;
+
+/// This is used in `#[extendr(use_rng = true)]` on `fn`-items.
+#[doc(hidden)]
+pub use libR_sys::PutRNGstate;
 
 #[doc(hidden)]
 pub use libR_sys::SEXP;
@@ -490,8 +470,8 @@ pub unsafe fn register_call_methods(info: *mut libR_sys::DllInfo, metadata: Meta
     );
 
     // This seems to allow both symbols and strings,
-    libR_sys::R_useDynamicSymbols(info, 0);
-    libR_sys::R_forceSymbols(info, 0);
+    libR_sys::R_useDynamicSymbols(info, Rboolean::FALSE);
+    libR_sys::R_forceSymbols(info, Rboolean::FALSE);
 }
 
 /// Type of R objects used by [Robj::rtype].
@@ -558,9 +538,10 @@ pub enum Rany<'a> {
 
 /// Convert extendr's Rtype to R's SEXPTYPE.
 /// Panics if the type is Unknown.
-pub fn rtype_to_sxp(rtype: Rtype) -> i32 {
+pub fn rtype_to_sxp(rtype: Rtype) -> SEXPTYPE {
     use Rtype::*;
-    (match rtype {
+    use SEXPTYPE::*;
+    match rtype {
         Null => NILSXP,
         Symbol => SYMSXP,
         Pairlist => LISTSXP,
@@ -584,15 +565,19 @@ pub fn rtype_to_sxp(rtype: Rtype) -> i32 {
         ExternalPtr => EXTPTRSXP,
         WeakRef => WEAKREFSXP,
         Raw => RAWSXP,
+        #[cfg(not(use_objsxp))]
         S4 => S4SXP,
+        #[cfg(use_objsxp)]
+        S4 => OBJSXP,
         Unknown => panic!("attempt to use Unknown Rtype"),
-    }) as i32
+    }
 }
 
 /// Convert R's SEXPTYPE to extendr's Rtype.
-pub fn sxp_to_rtype(sxptype: i32) -> Rtype {
+pub fn sxp_to_rtype(sxptype: SEXPTYPE) -> Rtype {
     use Rtype::*;
-    match sxptype as u32 {
+    use SEXPTYPE::*;
+    match sxptype {
         NILSXP => Null,
         SYMSXP => Symbol,
         LISTSXP => Pairlist,
@@ -616,7 +601,10 @@ pub fn sxp_to_rtype(sxptype: i32) -> Rtype {
         EXTPTRSXP => ExternalPtr,
         WEAKREFSXP => WeakRef,
         RAWSXP => Raw,
+        #[cfg(not(use_objsxp))]
         S4SXP => S4,
+        #[cfg(use_objsxp)]
+        OBJSXP => S4,
         _ => Unknown,
     }
 }
@@ -872,7 +860,7 @@ mod tests {
             person.set_name("fred");
             let robj = r!(person);
             assert_eq!(robj.check_external_ptr_type::<Person>(), true);
-            let person2 = <&Person>::from_robj(&robj).unwrap();
+            let person2 = <&Person>::try_from(&robj).unwrap();
             assert_eq!(person2.name(), "fred");
         }
     }
