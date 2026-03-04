@@ -12,6 +12,8 @@ $(STATLIB):
 	if [ -f ./rust/vendor.tar.xz ]; then \
 		tar -xJ -f ./rust/vendor.tar.xz -C ./rust; \
 	fi
+	mkdir -p ./rust/.cargo
+	cp ./rust/vendor-config.toml ./rust/.cargo/config.toml
 	mkdir -p $(LIBDIR)
 	export CARGO_HOME=$(CURDIR)/rust/.cargo && \
 	export CARGO_BUILD_JOBS=2 && \
