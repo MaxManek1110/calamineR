@@ -2,6 +2,67 @@ use extendr_api::prelude::*;
 use calamine::{open_workbook_auto, Reader, Data};
 use std::io::{Read as IoRead, BufReader, Cursor};
 use std::fs::File;
+use std::path::Path;
+
+// Supported file extensions
+const SUPPORTED_EXTENSIONS: &[&str] = &["xlsx", "xlsm", "xlsb", "xls", "ods"];
+
+/// Validate that the file path exists and has a supported extension
+fn validate_path(path: &str) -> std::result::Result<(), String> {
+    // Check if file exists
+    if !Path::new(path).exists() {
+        return Err(format!("File not found: '{}'", path));
+    }
+
+    // Check file extension
+    let lower_path = path.to_lowercase();
+    let has_valid_ext = SUPPORTED_EXTENSIONS.iter().any(|ext| lower_path.ends_with(&format!(".{}", ext)));
+
+    if !has_valid_ext {
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("(none)");
+        return Err(format!(
+            "Unsupported file format: '{}'. Supported formats: {}",
+            ext,
+            SUPPORTED_EXTENSIONS.join(", ")
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validate that the sheet argument is a single value (not a vector)
+fn validate_sheet_arg(sheet: &Robj) -> std::result::Result<(), String> {
+    let len = sheet.len();
+
+    if len == 0 {
+        return Err("Sheet argument cannot be empty".to_string());
+    }
+
+    if len > 1 {
+        return Err(format!(
+            "Sheet must be a single value, not a vector of length {}. Use sheet = 1 or sheet = \"SheetName\"",
+            len
+        ));
+    }
+
+    // Check type - must be string, integer, or numeric
+    let is_valid_type = sheet.is_string()
+        || sheet.is_integer()
+        || sheet.is_real()
+        || sheet.as_str().is_some();
+
+    if !is_valid_type {
+        return Err(format!(
+            "Sheet must be a character string or numeric index, got type: {:?}",
+            sheet.rtype()
+        ));
+    }
+
+    Ok(())
+}
 
 // Merge region structure
 #[derive(Debug, Clone)]
@@ -697,6 +758,18 @@ fn excel_to_r_date(serial: f64) -> f64 {
 // Helper to get sheet name from Robj (string or numeric index)
 fn get_sheet_name(sheet: &Robj, sheet_names: &[String]) -> std::result::Result<String, String> {
     if let Some(name) = sheet.as_str() {
+        // Validate that the sheet name exists
+        if !sheet_names.contains(&name.to_string()) {
+            let available = if sheet_names.len() <= 5 {
+                sheet_names.join(", ")
+            } else {
+                format!("{}, ... ({} total)", sheet_names[..3].join(", "), sheet_names.len())
+            };
+            return Err(format!(
+                "Sheet '{}' not found. Available sheets: {}",
+                name, available
+            ));
+        }
         return Ok(name.to_string());
     }
 
@@ -705,12 +778,19 @@ fn get_sheet_name(sheet: &Robj, sheet_names: &[String]) -> std::result::Result<S
         .or_else(|| sheet.as_real().map(|f| f as i32))
         .ok_or_else(|| "Sheet must be a string name or numeric index".to_string())?;
 
-    let idx = (idx - 1) as usize; // Convert to 0-based
-    if idx >= sheet_names.len() {
-        return Err(format!("Sheet index {} out of range (max: {})", idx + 1, sheet_names.len()));
+    if idx < 1 {
+        return Err(format!("Sheet index must be >= 1, got {}", idx));
     }
 
-    Ok(sheet_names[idx].clone())
+    let idx_usize = (idx - 1) as usize; // Convert to 0-based
+    if idx_usize >= sheet_names.len() {
+        return Err(format!(
+            "Sheet index {} out of range. Workbook has {} sheet(s)",
+            idx, sheet_names.len()
+        ));
+    }
+
+    Ok(sheet_names[idx_usize].clone())
 }
 
 /// Get sheet names from an Excel file
@@ -719,6 +799,9 @@ fn get_sheet_name(sheet: &Robj, sheet_names: &[String]) -> std::result::Result<S
 /// @export
 #[extendr]
 fn cal_sheet_names(path: &str) -> Result<Vec<String>> {
+    // Validate file path
+    validate_path(path).map_err(|e| Error::Other(e))?;
+
     let workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
@@ -732,6 +815,10 @@ fn cal_sheet_names(path: &str) -> Result<Vec<String>> {
 /// @export
 #[extendr]
 fn cal_read_sheet(path: &str, sheet: Robj) -> Result<List> {
+    // Validate inputs
+    validate_path(path).map_err(|e| Error::Other(e))?;
+    validate_sheet_arg(&sheet).map_err(|e| Error::Other(e))?;
+
     let mut workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
@@ -765,6 +852,14 @@ fn cal_read_sheet(path: &str, sheet: Robj) -> Result<List> {
 /// @export
 #[extendr]
 fn cal_read_sheet_df(path: &str, sheet: Robj, col_names: bool, skip: i32, fill_merged: bool) -> Result<List> {
+    // Validate inputs
+    validate_path(path).map_err(|e| Error::Other(e))?;
+    validate_sheet_arg(&sheet).map_err(|e| Error::Other(e))?;
+
+    if skip < 0 {
+        return Err(Error::Other("skip must be non-negative".to_string()));
+    }
+
     let mut workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
@@ -958,6 +1053,10 @@ fn cal_read_sheet_df(path: &str, sheet: Robj, col_names: bool, skip: i32, fill_m
 /// @export
 #[extendr]
 fn cal_sheet_dims(path: &str, sheet: Robj) -> Result<Vec<i32>> {
+    // Validate inputs
+    validate_path(path).map_err(|e| Error::Other(e))?;
+    validate_sheet_arg(&sheet).map_err(|e| Error::Other(e))?;
+
     let mut workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
@@ -1067,12 +1166,18 @@ fn parse_iso_date_to_r_days(s: &str) -> std::result::Result<f64, ()> {
     let month: u32 = parts[1].parse().map_err(|_| ())?;
     let day: u32 = parts[2].parse().map_err(|_| ())?;
 
+    // Validate month and day ranges
+    if month < 1 || month > 12 || day < 1 || day > 31 {
+        return Err(());
+    }
+
     // Simple days calculation (not accounting for all edge cases)
     // Days from year 1 to target year
     let days_from_years = (year - 1970) * 365 + count_leap_years(1970, year);
     let days_in_month: [u32; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let mut days_from_months: u32 = 0;
     for m in 0..(month - 1) as usize {
+        // Safe: month is validated to be 1-12, so m is 0-11
         days_from_months += days_in_month[m];
     }
     // Add leap day if applicable
@@ -1114,6 +1219,10 @@ fn cell_to_rstr(cell: &Data) -> Rstr {
 /// @export
 #[extendr]
 fn cal_merge_regions(path: &str, sheet: Robj) -> Result<List> {
+    // Validate inputs
+    validate_path(path).map_err(|e| Error::Other(e))?;
+    validate_sheet_arg(&sheet).map_err(|e| Error::Other(e))?;
+
     let workbook = open_workbook_auto(path)
         .map_err(|e| Error::Other(format!("Failed to open workbook: {}", e)))?;
 
