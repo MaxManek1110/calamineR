@@ -17,7 +17,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Maximilian Manek \email{maximilian.manek@hotmail.de}
+\strong{Maintainer}: Maximilian Manek \email{max-manek@hotmail.de}
 
 Authors:
 \itemize{

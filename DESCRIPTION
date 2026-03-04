@@ -2,7 +2,7 @@ Package: calamineR
 Title: Fast Excel File Reader Using Rust
 Version: 0.1.1
 Authors@R: c(
-    person("Maximilian", "Manek", email = "maximilian.manek@hotmail.de",
+    person("Maximilian", "Manek", email = "max-manek@hotmail.de",
                   role = c("aut", "cre")),
     person("Juan Antonio Monroy Kuhn", email = "amonroykuhn@gmail.com", role = "aut"),
     person("Johann Tuffe", role = "aut", comment = "calamine Rust library"),
