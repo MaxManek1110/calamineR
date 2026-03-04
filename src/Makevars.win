@@ -9,6 +9,9 @@ all: C_clean
 $(SHLIB): $(STATLIB)
 
 $(STATLIB):
+	if [ -f ./rust/vendor.tar.xz ]; then \
+		tar -xJ -f ./rust/vendor.tar.xz -C ./rust; \
+	fi
 	mkdir -p $(LIBDIR)
 	export CARGO_HOME=$(CURDIR)/rust/.cargo && \
 	export CARGO_BUILD_JOBS=2 && \
@@ -18,4 +21,4 @@ C_clean:
 	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS)
 
 clean:
-	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rust/target
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rust/target rust/vendor

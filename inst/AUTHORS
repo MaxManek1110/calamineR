@@ -1,48 +1,28 @@
-# calamineR Authors
+Authors of vendored cargo crates
+ - adler2 2.0.1: Jonas Schievink, oyvindln
+ - byteorder 1.5.0: Andrew Gallant
+ - calamine 0.24.0: Johann Tuffe
+ - cfg-if 1.0.4: Alex Crichton
+ - codepage 0.1.2: Henri Sivonen
+ - crc32fast 1.5.0: Sam Rijs, Alex Crichton
+ - encoding_rs 0.8.35: Henri Sivonen
+ - extendr-api 0.7.1: andy-thomason, Thomas Down, Mossa Merhi Reimert, Claus O. Wilke, Hiroaki Yutani, Ilia A. Kosenkov, Michael Milton
+ - extendr-macros 0.7.1: andy-thomason, Thomas Down, Mossa Merhi Reimert, Claus O. Wilke, Hiroaki Yutani, Ilia A. Kosenkov, Michael Milton
+ - flate2 1.1.9: Alex Crichton, Josh Triplett
+ - libR-sys 0.7.1: andy-thomason, Thomas Down, Mossa Merhi Reimert, Claus O. Wilke, Ilia A. Kosenkov, Hiroaki Yutani
+ - log 0.4.29: The Rust Project Developers
+ - memchr 2.8.0: Andrew Gallant, bluss
+ - miniz_oxide 0.8.9: Frommi, oyvindln, Rich Geldreich richgel99@gmail.com
+ - once_cell 1.21.3: Aleksey Kladov
+ - paste 1.0.15: David Tolnay
+ - proc-macro2 1.0.106: David Tolnay, Alex Crichton
+ - quote 1.0.45: David Tolnay
+ - serde 1.0.228: Erick Tryzelaar, David Tolnay
+ - serde_core 1.0.228: Erick Tryzelaar, David Tolnay
+ - serde_derive 1.0.228: Erick Tryzelaar, David Tolnay
+ - simd-adler32 0.3.8: Marvin Countryman
+ - syn 2.0.117: David Tolnay
+ - unicode-ident 1.0.24: David Tolnay
+ - zip 0.6.6: Mathijs van de Nes, Marli Frost, Ryan Levick
 
-## Package Authors
-Maximilian Manek <maximilian.manek@hotmail.de>
-Juan Antonio Monroy Kuhn <amonroykuhn@gmail.com>
-
-## Rust calamine library
-Johann Tuffe <tafia973@gmail.com>
-  https://github.com/tafia/calamine
-
-## Rust extendr framework
-andy-thomason <andy@andythomason.com>
-Thomas Down
-Mossa Merhi Reimert <mossa@sund.ku.dk>
-Claus O. Wilke <wilke@austin.utexas.edu>
-Hiroaki Yutani
-Ilia A. Kosenkov <ilia.kosenkov@outlook.com>
-Michael Milton <michael.r.milton@gmail.com>
-  https://github.com/extendr/extendr
-
-## Additional Vendored Rust Crates
-
-The following Rust crates are vendored in src/rust/vendor/.
-See LICENSE.note for license details.
-
-adler2: Jonas Schievink and contributors
-byteorder: Andrew Gallant
-cfg-if: Alex Crichton
-codepage: Nicolas Silva
-crc32fast: Sam Rijs, Alex Crichton
-crossbeam-utils: The Crossbeam Project Developers
-encoding_rs: Henri Sivonen
-flate2: Alex Crichton, Josh Triplett
-libR-sys: The extendr developers
-log: The Rust Project Developers
-memchr: Andrew Gallant, bluss
-miniz_oxide: Frommi, oyvindln
-once_cell: Aleksey Kladov
-paste: David Tolnay
-proc-macro2: David Tolnay, Alex Crichton
-quick-xml: Johann Tuffe, Mingun
-quote: David Tolnay
-serde: Erick Tryzelaar, David Tolnay
-serde_derive: Erick Tryzelaar, David Tolnay
-simd-adler32: Marvin Countryman
-syn: David Tolnay
-unicode-ident: David Tolnay
-zip: Mathijs van de Nes, Marli Frost, Ryan Levick
+(This file was auto-generated from 'cargo metadata' on 2026-03-04)
