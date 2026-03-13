@@ -10,5 +10,5 @@
 ^src/rust/\.cargo$
 ^\.\.Rcheck$
 ^benchmark\.R$
-^inst/extdata/random_table_40mb\.xlsb$
+^inst/extdata$
 ^CRAN-SUBMISSION$

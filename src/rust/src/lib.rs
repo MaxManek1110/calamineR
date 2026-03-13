@@ -3,36 +3,6 @@ use calamine::{open_workbook_auto, Reader, Data};
 use std::io::{Read as IoRead, BufReader, Cursor};
 use std::fs::File;
 use std::path::Path;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::Once;
-
-// Initialize silent panic hook once
-static INIT_PANIC_HOOK: Once = Once::new();
-
-fn init_panic_hook() {
-    INIT_PANIC_HOOK.call_once(|| {
-        std::panic::set_hook(Box::new(|_| {
-            // Silent panic hook - no stderr output
-        }));
-    });
-}
-
-/// Helper to convert panic to R error
-fn panic_to_error<T>(result: std::thread::Result<Result<T>>) -> Result<T> {
-    match result {
-        Ok(r) => r,
-        Err(e) => {
-            let msg = if let Some(s) = e.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = e.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "Unknown internal error".to_string()
-            };
-            Err(Error::Other(format!("Internal error: {}", msg)))
-        }
-    }
-}
 
 // Supported file extensions
 const SUPPORTED_EXTENSIONS: &[&str] = &["xlsx", "xlsm", "xlsb", "xls", "ods"];
@@ -829,11 +799,7 @@ fn get_sheet_name(sheet: &Robj, sheet_names: &[String]) -> std::result::Result<S
 /// @export
 #[extendr]
 fn cal_sheet_names(path: &str) -> Result<Vec<String>> {
-    init_panic_hook();
-    let path = path.to_string();
-    panic_to_error(catch_unwind(AssertUnwindSafe(|| {
-        cal_sheet_names_inner(&path)
-    })))
+    cal_sheet_names_inner(path)
 }
 
 fn cal_sheet_names_inner(path: &str) -> Result<Vec<String>> {
@@ -852,11 +818,7 @@ fn cal_sheet_names_inner(path: &str) -> Result<Vec<String>> {
 /// @export
 #[extendr]
 fn cal_read_sheet(path: &str, sheet: Robj) -> Result<List> {
-    init_panic_hook();
-    let path = path.to_string();
-    panic_to_error(catch_unwind(AssertUnwindSafe(|| {
-        cal_read_sheet_inner(&path, &sheet)
-    })))
+    cal_read_sheet_inner(path, &sheet)
 }
 
 fn cal_read_sheet_inner(path: &str, sheet: &Robj) -> Result<List> {
@@ -896,11 +858,7 @@ fn cal_read_sheet_inner(path: &str, sheet: &Robj) -> Result<List> {
 /// @export
 #[extendr]
 fn cal_read_sheet_df(path: &str, sheet: Robj, col_names: bool, skip: i32, fill_merged: bool) -> Result<List> {
-    init_panic_hook();
-    let path = path.to_string();
-    panic_to_error(catch_unwind(AssertUnwindSafe(|| {
-        cal_read_sheet_df_inner(&path, &sheet, col_names, skip, fill_merged)
-    })))
+    cal_read_sheet_df_inner(path, &sheet, col_names, skip, fill_merged)
 }
 
 fn cal_read_sheet_df_inner(path: &str, sheet: &Robj, col_names: bool, skip: i32, fill_merged: bool) -> Result<List> {
@@ -1104,11 +1062,7 @@ fn cal_read_sheet_df_inner(path: &str, sheet: &Robj, col_names: bool, skip: i32,
 /// @export
 #[extendr]
 fn cal_sheet_dims(path: &str, sheet: Robj) -> Result<Vec<i32>> {
-    init_panic_hook();
-    let path = path.to_string();
-    panic_to_error(catch_unwind(AssertUnwindSafe(|| {
-        cal_sheet_dims_inner(&path, &sheet)
-    })))
+    cal_sheet_dims_inner(path, &sheet)
 }
 
 fn cal_sheet_dims_inner(path: &str, sheet: &Robj) -> Result<Vec<i32>> {
@@ -1277,11 +1231,7 @@ fn cell_to_rstr(cell: &Data) -> Rstr {
 /// @export
 #[extendr]
 fn cal_merge_regions(path: &str, sheet: Robj) -> Result<List> {
-    init_panic_hook();
-    let path = path.to_string();
-    panic_to_error(catch_unwind(AssertUnwindSafe(|| {
-        cal_merge_regions_inner(&path, &sheet)
-    })))
+    cal_merge_regions_inner(path, &sheet)
 }
 
 fn cal_merge_regions_inner(path: &str, sheet: &Robj) -> Result<List> {

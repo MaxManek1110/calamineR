@@ -1,13 +1,16 @@
 Package: calamineR
 Title: Fast Excel File Reader Using Rust
 Version: 0.1.1
-Authors@R: c(
-    person("Maximilian", "Manek", email = "max-manek@hotmail.de",
-                  role = c("aut", "cre")),
+Author: Maximilian Manek [aut, cre],
+    Juan Antonio Monroy Kuhn [aut],
+    Johann Tuffe [aut] (calamine Rust library),
+    Authors of the dependent Rust crates [aut] (see inst/AUTHORS file)
+Maintainer: Maximilian Manek <max-manek@hotmail.de>
+Authors@R:
+    c(person("Maximilian", "Manek", email = "max-manek@hotmail.de", role = c("aut", "cre")),
     person("Juan Antonio Monroy Kuhn", email = "amonroykuhn@gmail.com", role = "aut"),
     person("Johann Tuffe", role = "aut", comment = "calamine Rust library"),
-    person("Authors of the dependent Rust crates", role = "aut", comment = "see inst/AUTHORS file")
-    )
+    person("Authors of the dependent Rust crates", role = "aut", comment = "see inst/AUTHORS file"))
 Description: High-performance Excel file reader supporting xlsx, xlsm, xlsb,
     xls, and ods formats. Built on the Rust 'calamine' library, providing
     significantly faster read times compared to pure R implementations.
