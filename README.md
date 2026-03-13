@@ -34,24 +34,58 @@ devtools::install_github("MaxManek1110/calamineR")
 ``` r
 library(calamineR)
 
-# Read a sheet as data.frame
-df <- read_excel("data.xlsx")
-df <- read_excel("data.xlsb", sheet = "Sheet2")
-df <- read_excel("data.xlsx", sheet = 2, col_names = FALSE)
-df <- read_excel("data.xlsx", skip = 5)  # Skip first 5 rows
+# Create a sample Excel file for demonstration
+sample_data <- data.frame(
+  name = c("Alice", "Bob", "Charlie"),
+  age = c(25, 30, 35),
+  score = c(85.5, 92.3, 78.9)
+)
+demo_file <- tempfile(fileext = ".xlsx")
+writexl::write_xlsx(sample_data, demo_file)
 
-# Fill merged cells with the top-left cell value
-df <- read_excel("data.xlsx", fill_merged_cells = TRUE)
+# Read a sheet as data.frame
+df <- read_excel(demo_file)
+print(df)
+#>      name age score
+#> 1   Alice  25  85.5
+#> 2     Bob  30  92.3
+#> 3 Charlie  35  78.9
+
+# Read with different options
+df <- read_excel(demo_file, col_names = FALSE)
+head(df, 3)
+#>      V1  V2    V3
+#> 1  name age score
+#> 2 Alice  25  85.5
+#> 3   Bob  30  92.3
+
+df <- read_excel(demo_file, skip = 1)  # Skip header row
+head(df, 2)
+#>     Alice 25 85.5
+#> 1     Bob 30 92.3
+#> 2 Charlie 35 78.9
 
 # Get sheet names
-sheets <- excel_sheets("data.xlsx")
+sheets <- excel_sheets(demo_file)
+print(sheets)
+#> [1] "Sheet1"
 
 # Get sheet dimensions
-dims <- sheet_dims("data.xlsx", 1)
-# dims["rows"], dims["cols"]
+dims <- sheet_dims(demo_file, 1)
+cat("Rows:", dims["rows"], "Cols:", dims["cols"], "\n")
+#> Rows: 4 Cols: 3
 
 # Read as raw list of rows (for complex layouts)
-rows <- read_sheet_raw("data.xlsx", "Sheet1")
+rows <- read_sheet_raw(demo_file, "Sheet1")
+str(rows)
+#> List of 4
+#>  $ : chr [1:3] "name" "age" "score"
+#>  $ : chr [1:3] "Alice" "25" "85.5"
+#>  $ : chr [1:3] "Bob" "30" "92.3"
+#>  $ : chr [1:3] "Charlie" "35" "78.9"
+
+# Cleanup
+unlink(demo_file)
 ```
 
 ## Functions
@@ -62,12 +96,11 @@ rows <- read_sheet_raw("data.xlsx", "Sheet1")
 | `excel_sheets()`   | Get sheet names                   |
 | `sheet_dims()`     | Get sheet dimensions (rows, cols) |
 | `read_sheet_raw()` | Read as list of character vectors |
-| `merge_regions()`  | Get merged cell regions           |
 
 ## Parameters for `read_excel()`
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+|----|----|----|----|
 | `path` | character | (required) | Path to the Excel file |
 | `sheet` | character/integer | `1L` | Sheet name or 1-based index |
 | `col_names` | logical | `TRUE` | Use first row as column names |
@@ -76,9 +109,13 @@ rows <- read_sheet_raw("data.xlsx", "Sheet1")
 
 ## Merged Cells Support
 
-When `fill_merged_cells = TRUE`, cells that are part of a merged region are filled with the value from the top-left cell of that region. This is useful when reading spreadsheets where headers or data span multiple cells.
+When `fill_merged_cells = TRUE`, cells that are part of a merged region
+are filled with the value from the top-left cell of that region. This is
+useful when reading spreadsheets where headers or data span multiple
+cells.
 
-Supported formats: xlsx, xlsm, xlsb, xls (ods not yet supported for merged cells).
+Supported formats: xlsx, xlsm, xlsb, xls (ods not yet supported for
+merged cells).
 
 ## Performance
 
@@ -88,6 +125,76 @@ alternatives:
 - 1.75x faster than excelize (Go)
 - 7x faster than ClosedXML (C#)
 - 9x faster than openpyxl (Python)
+
+## Benchmark
+
+Comparison against `readxl` for reading a large Excel file with 500,000
+rows.
+
+``` r
+library(calamineR)
+
+# Create a large test file with 500k rows x 10 columns
+set.seed(42)
+n_rows <- 500000
+test_data <- data.frame(
+  id = seq_len(n_rows),
+  name = paste0("item_", seq_len(n_rows)),
+  value1 = rnorm(n_rows),
+  value2 = rnorm(n_rows),
+  value3 = runif(n_rows),
+  category = sample(LETTERS[1:5], n_rows, replace = TRUE),
+  date = as.character(Sys.Date() + sample(1:1000, n_rows, replace = TRUE)),
+  flag = sample(c("yes", "no"), n_rows, replace = TRUE),
+  amount = round(runif(n_rows, 100, 10000), 2),
+
+  notes = paste0("note_", sample(1:100, n_rows, replace = TRUE))
+)
+
+# Write to temporary xlsx file
+temp_file <- tempfile(fileext = ".xlsx")
+writexl::write_xlsx(test_data, temp_file)
+file_size_mb <- round(file.size(temp_file) / 1024^2, 1)
+cat("Test file size:", file_size_mb, "MB\n")
+#> Test file size: 42 MB
+cat("Dimensions:", n_rows, "rows x", ncol(test_data), "columns\n\n")
+#> Dimensions: 5e+05 rows x 10 columns
+
+# Benchmark calamineR
+cat("calamineR::read_excel()\n")
+#> calamineR::read_excel()
+time_calamineR <- system.time({
+  df_calamineR <- calamineR::read_excel(temp_file)
+})
+cat("  Time:", round(time_calamineR["elapsed"], 3), "seconds\n")
+#>   Time: 7.074 seconds
+cat("  Rows:", nrow(df_calamineR), " Cols:", ncol(df_calamineR), "\n\n")
+#>   Rows: 500000  Cols: 10
+
+# Benchmark readxl
+cat("readxl::read_xlsx()\n")
+#> readxl::read_xlsx()
+time_readxl <- system.time({
+  df_readxl <- readxl::read_xlsx(temp_file)
+})
+cat("  Time:", round(time_readxl["elapsed"], 3), "seconds\n")
+#>   Time: 7.726 seconds
+cat("  Rows:", nrow(df_readxl), " Cols:", ncol(df_readxl), "\n\n")
+#>   Rows: 500000  Cols: 10
+
+# Summary
+cat("--- Summary ---\n")
+#> --- Summary ---
+cat("calamineR:", round(time_calamineR["elapsed"], 3), "s\n")
+#> calamineR: 7.074 s
+cat("readxl:   ", round(time_readxl["elapsed"], 3), "s\n")
+#> readxl:    7.726 s
+cat("Speedup:  ", round(time_readxl["elapsed"] / time_calamineR["elapsed"], 1), "x faster\n")
+#> Speedup:   1.1 x faster
+
+# Cleanup
+unlink(temp_file)
+```
 
 ## Development
 
