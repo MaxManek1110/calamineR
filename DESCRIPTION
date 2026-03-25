@@ -1,6 +1,6 @@
 Package: calamineR
 Title: Fast Excel File Reader Using Rust
-Version: 0.1.1
+Version: 0.1.2
 Author: Maximilian Manek [aut, cre],
     Juan Antonio Monroy Kuhn [aut],
     Johann Tuffe [aut] (calamine Rust library),
